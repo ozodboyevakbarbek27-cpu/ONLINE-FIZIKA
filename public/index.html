@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="uz"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Online fizika</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{--bg:var(--tg-theme-bg-color,#fff);--tx:var(--tg-theme-text-color,#111);--hint:var(--tg-theme-hint-color,#777);--btn:var(--tg-theme-button-color,#2481cc);--bt:var(--tg-theme-button-text-color,#fff);--card:var(--tg-theme-secondary-bg-color,#f1f3f5)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px system-ui,sans-serif;padding:14px;padding-bottom:40px}
+h2,h3{margin:8px 0}
+button{display:block;width:100%;margin:8px 0;padding:14px;border:0;border-radius:12px;background:var(--btn);color:var(--bt);font-size:16px}
+button.g{background:var(--card);color:var(--tx)}
+button:disabled{opacity:.6}
+button.o{background:var(--card);color:var(--tx);text-align:left}
+button.ok{background:#2e9e4f!important;color:#fff!important}
+button.bad{background:#d64545!important;color:#fff!important}
+button.pick{outline:3px solid var(--btn)}
+input,select{width:100%;padding:12px;margin:6px 0;border-radius:10px;border:1px solid var(--hint);background:var(--bg);color:var(--tx);font-size:18px}
+.hint{color:var(--hint)}
+.code{font-size:44px;letter-spacing:8px;text-align:center;font-weight:700;margin:10px 0}
+.chip{display:inline-block;background:var(--card);padding:6px 12px;border-radius:20px;margin:3px}
+.row{display:flex;justify-content:space-between;padding:8px 10px;background:var(--card);border-radius:10px;margin:4px 0}
+.bar{height:6px;background:var(--btn);border-radius:3px;margin-top:4px}
+.lesson{white-space:pre-line;background:var(--card);padding:12px;border-radius:12px;line-height:1.5}
+#tm{float:right;font-weight:700}
+</style></head>
+<body><div id="app"></div>
+<script>
+const tg = window.Telegram && Telegram.WebApp;
+if (tg) { tg.ready(); tg.expand(); }
+const $ = document.getElementById('app');
+const init = (tg && tg.initData) || ('dev:' + (new URLSearchParams(location.search).get('id') || '1') + ':Mehmon');
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const api = u => fetch(u, { headers: { 'x-init': init } }).then(r => r.json());
+let me = {}, topics = [], ws, S = {};
+
+async function boot() { me = await api('/api/me'); topics = await api('/api/topics'); home(); }
+function home() {
+  S = {};
+  $.innerHTML = `<h2>⚡ Online fizika</h2><p class="hint">Salom, ${esc(me.name || '')}!</p>
+  <button onclick="listT()">📚 Darslar va testlar</button>
+  <button onclick="joinV()">🎮 Online o'yinga kirish</button>
+  ${me.teacher ? '<button onclick="teachV()">👨‍🏫 Xona ochish (ustoz)</button>' : ''}`;
+}
+function listT() {
+  $.innerHTML = '<h3>Mavzular</h3>' + topics.map(t => `<button class="o" onclick="topicV('${t.id}')">${esc(t.name)} <span class="hint">· ${t.n} savol</span></button>`).join('') + '<button class="g" onclick="home()">⬅️ Orqaga</button>';
+}
+async function topicV(id) {
+  const t = await api('/api/topic/' + id); S.t = t;
+  $.innerHTML = `<h3>${esc(t.name)}</h3><div class="lesson">${esc(t.lesson)}</div><button onclick="solo()">📝 Testni boshlash</button><button class="g" onclick="listT()">⬅️ Orqaga</button>`;
+}
+function solo() { S.i = 0; S.sc = 0; sq(); }
+function sq() {
+  const t = S.t, q = t.qs[S.i];
+  if (!q) { $.innerHTML = `<h2>Natija: ${S.sc} / ${t.qs.length}</h2><button onclick="home()">Bosh sahifa</button>`; return; }
+  $.innerHTML = `<p class="hint">${S.i + 1} / ${t.qs.length}</p><h3>${esc(q.q)}</h3>` +
+    q.o.map((o, k) => `<button class="o" onclick="sa(${k})">${esc(o)}</button>`).join('') + '<div id="ex"></div>';
+}
+function sa(k) {
+  const q = S.t.qs[S.i];
+  document.querySelectorAll('.o').forEach((b, j) => { b.disabled = true; if (j === q.a) b.classList.add('ok'); else if (j === k) b.classList.add('bad'); });
+  if (k === q.a) S.sc++;
+  document.getElementById('ex').innerHTML = `<p>${esc(q.e || '')}</p><button onclick="S.i++;sq()">Keyingisi ➡️</button>`;
+}
+
+function conn(first) {
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+  ws.onopen = () => send(first);
+  ws.onmessage = e => on(JSON.parse(e.data));
+  ws.onclose = () => { if (S.view && S.view !== 'end') { S.view = 'lost'; draw(); } };
+}
+const send = o => ws.send(JSON.stringify(o));
+function joinV() {
+  $.innerHTML = `<h3>Xona kodi</h3><input id="code" inputmode="numeric" maxlength="6" placeholder="123456">
+  <button onclick="conn({t:'join',init,code:document.getElementById('code').value.trim()})">Kirish</button><button class="g" onclick="home()">⬅️ Orqaga</button>`;
+}
+function teachV() {
+  $.innerHTML = `<h3>Yangi xona</h3>
+  <select id="tp">${topics.map(t => `<option value="${t.id}">${esc(t.name)} (${t.n})</option>`).join('')}<option value="all">Aralash (hamma mavzu)</option></select>
+  <select id="sec"><option value="15">15 soniya</option><option value="20" selected>20 soniya</option><option value="30">30 soniya</option><option value="45">45 soniya</option></select>
+  <input id="cnt" type="number" min="1" placeholder="Savollar soni (bo'sh = hammasi)">
+  <button onclick="conn({t:'create',init,topic:tp.value,sec:+sec.value,count:+cnt.value||0})">Xonani ochish</button><button class="g" onclick="home()">⬅️ Orqaga</button>`;
+}
+function on(m) {
+  if (m.t === 'err') return alert(m.msg);
+  if (m.t === 'created') { S = { view: 'lobbyT', code: m.code, total: m.total, topic: m.topic, names: [], role: 't' }; }
+  else if (m.t === 'joined') { S = { view: 'lobbyP', topic: m.topic, names: [] }; }
+  else if (m.t === 'lobby') { S.names = m.players; }
+  else if (m.t === 'q') { S.q = m; S.picked = null; S.res = null; S.board = null; S.deadline = Date.now() + m.sec * 1000; S.view = S.role === 't' ? 'qT' : 'qP'; }
+  else if (m.t === 'board') { S.board = m; }
+  else if (m.t === 'r') { S.res = m; S.deadline = 0; S.view = S.role === 't' ? 'qT' : 'rP'; if (m.players) S.board = m; }
+  else if (m.t === 'end') { S.rank = m.ranking; S.view = 'end'; }
+  draw();
+}
+function pick(k) { S.picked = k; send({ t: 'a', i: S.q.i, c: k }); draw(); }
+const chips = n => n.map(x => `<span class="chip">${esc(x)}</span>`).join('') || '<span class="hint">Hali hech kim yo\'q</span>';
+function draw() {
+  const v = S.view, q = S.q, res = S.res;
+  if (v === 'lobbyT') $.innerHTML = `<h3>Xona kodi</h3><div class="code">${S.code}</div><p class="hint">${esc(S.topic)} · ${S.total} savol</p><p>O'quvchilar (${S.names.length}):</p><div>${chips(S.names)}</div><button ${S.names.length ? '' : 'disabled'} onclick="send({t:'start'})">▶️ Boshlash</button>`;
+  else if (v === 'lobbyP') $.innerHTML = `<h3>✅ Xonaga kirdingiz</h3><p class="hint">${esc(S.topic)}</p><p>Ustoz boshlashini kuting…</p><div>${chips(S.names)}</div>`;
+  else if (v === 'qP') $.innerHTML = `<p class="hint">${q.i + 1} / ${q.total}<span id="tm"></span></p><h3>${esc(q.text)}</h3>` +
+    q.o.map((o, k) => `<button class="o ${S.picked === k ? 'pick' : ''}" ${S.picked != null ? 'disabled' : ''} onclick="pick(${k})">${esc(o)}</button>`).join('') + (S.picked != null ? '<p class="hint">Javob yuborildi ⏳</p>' : '');
+  else if (v === 'rP') $.innerHTML = `<p class="hint">${q.i + 1} / ${q.total}</p><h3>${esc(q.text)}</h3>` +
+    q.o.map((o, k) => `<button class="o ${k === res.correct ? 'ok' : (k === S.picked ? 'bad' : '')}" disabled>${esc(o)}</button>`).join('') +
+    `<p>${res.gained ? '+' + res.gained + ' ball 🎉' : (S.picked == null ? 'Vaqt tugadi ⏱' : 'Noto\'g\'ri ❌')}</p><p>Jami: <b>${res.score}</b> · O'rin: <b>${res.rank}</b></p><p class="hint">${esc(res.e)}</p>`;
+  else if (v === 'qT') {
+    const b = S.board || { players: [], counts: [0, 0, 0, 0] }, tot = Math.max(1, ...b.counts);
+    $.innerHTML = `<p class="hint">${q.i + 1} / ${q.total}<span id="tm"></span></p><h3>${esc(q.text)}</h3>` +
+      q.o.map((o, k) => `<div class="row" style="${res && k === res.correct ? 'background:#2e9e4f;color:#fff' : ''}"><span>${esc(o)}</span><b>${b.counts[k]}</b></div><div class="bar" style="width:${b.counts[k] / tot * 100}%"></div>`).join('') +
+      (res ? `<p class="hint">${esc(res.e)}</p>` : '') + '<h3>Natijalar</h3>' +
+      b.players.map((p, i) => `<div class="row"><span>${i + 1}. ${esc(p.name)} ${p.answered ? '✅' : '…'}</span><b>${p.score}</b></div>`).join('');
+  }
+  else if (v === 'end') $.innerHTML = '<h2>🏆 Yakuniy natija</h2>' + S.rank.map((p, i) => `<div class="row"><span>${['🥇', '🥈', '🥉'][i] || (i + 1) + '.'} ${esc(p.name)}</span><b>${p.score}</b></div>`).join('') + '<button onclick="location.reload()">Bosh sahifa</button>';
+  else if (v === 'lost') $.innerHTML = '<h3>Ulanish uzildi</h3><button onclick="location.reload()">Qayta yuklash</button>';
+}
+setInterval(() => { const e = document.getElementById('tm'); if (e && S.deadline) e.textContent = '⏱ ' + Math.max(0, Math.ceil((S.deadline - Date.now()) / 1000)); }, 250);
+boot();
+</script></body></html>
