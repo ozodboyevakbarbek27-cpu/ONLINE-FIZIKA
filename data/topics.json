@@ -1,0 +1,69 @@
+{
+  "topics": [
+    {
+      "id": "kinematika",
+      "name": "Kinematika",
+      "lesson": "Kinematika jismlarning harakatini sabablarini (kuchni) hisobga olmay o'rganadi.\n\n• Tezlik: v = s / t (SI: m/s)\n• Tekis tezlanuvchan harakat: v = v₀ + a·t\n• Tezlanish: a = (v − v₀) / t (SI: m/s²)\n• Erkin tushish tezlanishi: g ≈ 9,8 m/s²\n\nYo'l — skalyar kattalik, ko'chish — vektor kattalik.",
+      "qs": [
+        {"q": "Tezlikning SI dagi birligi qaysi?", "o": ["m/s", "km/soat", "m/s²", "N"], "a": 0, "e": "Tezlik = masofa / vaqt, SI da m/s."},
+        {"q": "Jism 10 m/s tezlik bilan 5 s tekis harakatlansa, bosib o'tgan yo'li qancha?", "o": ["15 m", "2 m", "50 m", "500 m"], "a": 2, "e": "s = v·t = 10·5 = 50 m."},
+        {"q": "Tezlanish formulasi qaysi?", "o": ["a = v·t", "a = (v − v₀)/t", "a = s/t", "a = v/s"], "a": 1, "e": "Tezlanish tezlik o'zgarishining vaqtga nisbatiga teng."},
+        {"q": "Erkin tushish tezlanishi taxminan nechaga teng?", "o": ["98 m/s²", "1,6 m/s²", "9,8 m/s²", "3·10⁸ m/s²"], "a": 2, "e": "Yer yuzasida g ≈ 9,8 m/s²."},
+        {"q": "Jism tinch holatdan 2 m/s² tezlanish bilan 4 s harakatlansa, tezligi qancha bo'ladi?", "o": ["2 m/s", "6 m/s", "16 m/s", "8 m/s"], "a": 3, "e": "v = a·t = 2·4 = 8 m/s."},
+        {"q": "Yo'l va ko'chish haqida qaysi gap to'g'ri?", "o": ["Ko'chish vektor, yo'l skalyar", "Ikkalasi ham vektor", "Yo'l vektor, ko'chish skalyar", "Ikkalasi ham skalyar"], "a": 0, "e": "Ko'chishning yo'nalishi bor, yo'lning yo'q."}
+      ]
+    },
+    {
+      "id": "dinamika",
+      "name": "Dinamika",
+      "lesson": "Dinamika harakatni kuch bilan bog'liq holda o'rganadi.\n\n• 1-qonun (inersiya): kuch ta'sir qilmasa jism tinch yoki tekis harakatda qoladi.\n• 2-qonun: F = m·a\n• 3-qonun: ta'sir kuchi aks ta'sir kuchiga teng va qarama-qarshi.\n• Og'irlik kuchi: F = m·g\n\nKuch birligi — Nyuton (N).",
+      "qs": [
+        {"q": "Nyutonning ikkinchi qonuni formulasi qaysi?", "o": ["F = m/a", "F = m·a", "F = m·v", "F = a/m"], "a": 1, "e": "Kuch massa va tezlanish ko'paytmasiga teng."},
+        {"q": "Kuchning SI dagi birligi qaysi?", "o": ["Joul", "Vatt", "Nyuton", "Paskal"], "a": 2, "e": "1 N = 1 kg·m/s²."},
+        {"q": "Massasi 2 kg bo'lgan jismga 6 N kuch ta'sir qilsa, tezlanishi qancha?", "o": ["12 m/s²", "3 m/s²", "4 m/s²", "0,33 m/s²"], "a": 1, "e": "a = F/m = 6/2 = 3 m/s²."},
+        {"q": "Jismga ta'sir etuvchi og'irlik kuchi formulasi qaysi?", "o": ["F = m·g", "F = m/g", "F = g/m", "F = m·v"], "a": 0, "e": "Og'irlik kuchi massa va g ning ko'paytmasi."},
+        {"q": "Nyutonning uchinchi qonuni nima deydi?", "o": ["Ta'sir va aks ta'sir kuchlari kattaligi teng, yo'nalishi qarama-qarshi", "Kuch massaga bog'liq emas", "Jism doim harakatda bo'ladi", "Tezlanish kuchga teskari"], "a": 0, "e": "Kuchlar juft bo'lib paydo bo'ladi."},
+        {"q": "Massasi 5 kg jismning og'irligi nechaga teng (g = 10 m/s²)?", "o": ["5 N", "15 N", "50 N", "0,5 N"], "a": 2, "e": "F = 5·10 = 50 N."}
+      ]
+    },
+    {
+      "id": "issiqlik",
+      "name": "Issiqlik hodisalari",
+      "lesson": "• Temperatura SI da Kelvin (K) bilan o'lchanadi; 0 K — absolyut nol.\n• Suv normal bosimda 0 °C da muzlaydi, 100 °C da qaynaydi.\n• Issiqlik miqdori: Q = c·m·ΔT (birligi: Joul)\n• Issiqlik uzatish turlari: issiqlik o'tkazuvchanlik, konveksiya, nurlanish.",
+      "qs": [
+        {"q": "Temperaturaning SI dagi birligi qaysi?", "o": ["Selsiy", "Kelvin", "Joul", "Farengeyt"], "a": 1, "e": "SI da temperatura Kelvin (K) da o'lchanadi."},
+        {"q": "Suv normal bosimda necha gradusda qaynaydi?", "o": ["50 °C", "90 °C", "0 °C", "100 °C"], "a": 3, "e": "Normal atmosfera bosimida 100 °C."},
+        {"q": "Jismni qizdirish uchun kerak bo'lgan issiqlik miqdori formulasi qaysi?", "o": ["Q = F·s", "Q = c·m·ΔT", "Q = m/c", "Q = ρ·V"], "a": 1, "e": "c — solishtirma issiqlik sig'imi, m — massa."},
+        {"q": "Issiqlik uzatishning turlari qaysilar?", "o": ["O'tkazuvchanlik, konveksiya, nurlanish", "Faqat nurlanish", "Tebranish va to'lqin", "Bosim va hajm"], "a": 0, "e": "Uchta asosiy usul bor."},
+        {"q": "0 K nima deb ataladi?", "o": ["Suvning muzlash nuqtasi", "Absolyut nol", "Suvning qaynash nuqtasi", "Xona temperaturasi"], "a": 1, "e": "Eng past mumkin bo'lgan temperatura, taxminan −273,15 °C."},
+        {"q": "Issiqlik miqdorining SI dagi birligi qaysi?", "o": ["Nyuton", "Om", "Joul", "Vatt"], "a": 2, "e": "Issiqlik ham energiya, birligi Joul."}
+      ]
+    },
+    {
+      "id": "elektr",
+      "name": "Elektr toki",
+      "lesson": "• Tok kuchi birligi — Amper (A), kuchlanish — Volt (V), qarshilik — Om (Ω).\n• Om qonuni: I = U / R\n• Ketma-ket ulashda: R = R₁ + R₂ + …\n• Elektr quvvati: P = U·I (birligi: Vatt)",
+      "qs": [
+        {"q": "Zanjir qismi uchun Om qonuni qaysi?", "o": ["I = U·R", "I = R/U", "I = U/R", "I = U + R"], "a": 2, "e": "Tok kuchi kuchlanishga to'g'ri, qarshilikka teskari proporsional."},
+        {"q": "Elektr qarshilikning SI dagi birligi qaysi?", "o": ["Volt", "Om", "Amper", "Vatt"], "a": 1, "e": "Qarshilik Om (Ω) bilan o'lchanadi."},
+        {"q": "U = 12 V, R = 4 Ω bo'lsa, tok kuchi qancha?", "o": ["48 A", "8 A", "0,33 A", "3 A"], "a": 3, "e": "I = U/R = 12/4 = 3 A."},
+        {"q": "Ketma-ket ulangan rezistorlarning umumiy qarshiligi qanday topiladi?", "o": ["R₁ + R₂ + …", "Faqat kattasiga teng", "1/R₁ + 1/R₂", "R₁ · R₂"], "a": 0, "e": "Ketma-ket ulashda qarshiliklar qo'shiladi."},
+        {"q": "Elektr quvvati formulasi qaysi?", "o": ["P = U/I", "P = U·I", "P = I/U", "P = U + I"], "a": 1, "e": "Quvvat kuchlanish va tok kuchi ko'paytmasi."},
+        {"q": "Tok kuchining SI dagi birligi qaysi?", "o": ["Kulon", "Volt", "Amper", "Om"], "a": 2, "e": "Tok kuchi Amper (A) da o'lchanadi."}
+      ]
+    },
+    {
+      "id": "optika",
+      "name": "Optika",
+      "lesson": "• Yorug'likning vakuumdagi tezligi c ≈ 3·10⁸ m/s.\n• Qaytish qonuni: tushish burchagi = qaytish burchagi.\n• Yorug'lik muhit o'zgarganda yo'nalishini o'zgartiradi — bu sinish (refraksiya).\n• Yig'uvchi (qavariq) linza nurlarni fokusga yig'adi.\n• Linzaning optik kuchi dioptriya (dptr) bilan o'lchanadi.\n• Oq yorug'lik prizmada spektrga ajraladi.",
+      "qs": [
+        {"q": "Yorug'likning vakuumdagi tezligi taxminan qancha?", "o": ["340 m/s", "3·10⁸ m/s", "3·10⁵ m/s", "3·10³ m/s"], "a": 1, "e": "c ≈ 300 000 km/s."},
+        {"q": "Yorug'lik qaytish qonuni nima deydi?", "o": ["Tushish burchagi qaytish burchagiga teng", "Qaytish burchagi doim 90°", "Tushish burchagi qaytish burchagidan katta", "Burchaklar bir-biriga bog'liq emas"], "a": 0, "e": "Ikkala burchak normaldan o'lchanadi va teng bo'ladi."},
+        {"q": "Qavariq (yig'uvchi) linza parallel nurlarni qanday qiladi?", "o": ["Tarqatadi", "Bir nuqtaga yig'adi", "Qaytaradi", "Yutadi"], "a": 1, "e": "Nurlar fokusda kesishadi."},
+        {"q": "Linzaning optik kuchi qanday birlikda o'lchanadi?", "o": ["Kandela", "Joul", "Dioptriya", "Om"], "a": 2, "e": "D = 1/F, birligi dioptriya."},
+        {"q": "Oq yorug'lik shisha prizmadan o'tganda nima bo'ladi?", "o": ["Yo'qoladi", "Spektrga ajraladi", "Qorayadi", "Tezlashadi"], "a": 1, "e": "Dispersiya hodisasi: turli ranglar turlicha sinadi."},
+        {"q": "Yorug'likning bir muhitdan ikkinchisiga o'tganda yo'nalishini o'zgartirishi nima deyiladi?", "o": ["Interferensiya", "Difraksiya", "Sinish (refraksiya)", "Qutblanish"], "a": 2, "e": "Muhitlarda yorug'lik tezligi har xil bo'lgani uchun sinadi."}
+      ]
+    }
+  ]
+}
