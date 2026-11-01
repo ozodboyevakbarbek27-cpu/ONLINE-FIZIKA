@@ -44,13 +44,37 @@ button:active{transform:scale(.97)}button.g{background:var(--card2);color:var(--
 #gt{white-space:pre-line;font-size:18px;line-height:1.5;min-height:180px}
 .btnl{display:block;text-align:center;border-radius:14px;padding:13px;background:var(--card2);margin:5px 0;font-weight:700;cursor:pointer}
 .lr{display:flex;gap:10px;align-items:center}.lr b{flex:1}
+
+/* TOZA tema (taxta va donalar o‘zgarmagan) */
+:root{--bg:#0a0e14;--card:#141a22;--card2:#1b232e;--bd:#263140;--tx:#f2f5f9;--mut:#8a94a6;--ac:#e2b542;--ac2:#e2b542}
+body{background:var(--bg)}
+.hd{text-align:center;padding:16px 0 14px;margin:0 -14px 16px;background:#0c1420;border-bottom:1px solid var(--bd)}
+.hd h1{font-size:36px;font-weight:800}.hd h1 span{color:var(--ac)}.hd .sub{font-size:17px;margin-top:4px}
+button{background:var(--ac);color:#1a1405;box-shadow:none;border:0;text-shadow:none}
+button.g{background:var(--card2);color:var(--tx);border:1px solid var(--bd)}
+.big{background:var(--card);color:var(--tx);border:1px solid var(--bd)}
+input,select{background:var(--card2);border:1px solid var(--bd);color:var(--tx)}
+.btnl{background:var(--card2);border:1px solid var(--bd)}
+.card{border:1px solid var(--bd);border-radius:20px}
+.me{padding:16px;border-radius:22px}.me .av{width:52px;height:52px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0}
+.tl{background:var(--card);color:var(--tx);border:1px solid var(--bd);border-radius:22px;padding:16px 8px;margin:0;min-height:130px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-transform:uppercase;font-weight:800;font-size:15px;line-height:1.2}
+.tl span{font-size:36px;line-height:1}.tl small{display:block;text-transform:none;font-weight:500;color:var(--mut);font-size:14px}
+.tl.on1{border-color:var(--ac)}
+.radar{width:140px;height:140px;border-radius:50%;margin:26px auto 14px;border:2px solid var(--ac);display:flex;align-items:center;justify-content:center;font-size:60px;animation:rd 1.6s infinite}
+@keyframes rd{0%{box-shadow:0 0 0 0 rgba(226,181,66,.5)}100%{box-shadow:0 0 0 40px rgba(226,181,66,0)}}
 </style></head><body>
 <div class="s on" id="m">
-<div class="hero"><div class="logo">♞</div><h1 data-i="title"></h1><p class="sub" data-i="sub"></p></div>
+<div class="hd"><h1>♟ UZB <span>CHESS</span></h1><p class="sub" data-i="sub"></p></div>
 <div class="card me" onclick="prof();show('pr')"><div class="av" id="mav"></div><div><b id="mn"></b><small id="ms"></small></div></div>
-<button class="big" onclick="show('bot')"><span>🤖</span><b data-i="bot"></b></button>
-<button class="big" onclick="show('on')"><span>🌐</span><b data-i="online"></b></button>
-<div class="two"><button class="big g" onclick="lb();show('lb')"><span>🏆</span><b data-i="lead"></b></button><button class="big g" onclick="openGuide()"><span>📖</span><b data-i="guide"></b></button></div>
+<div class="grid">
+<button class="tl on1" onclick="show('bot')"><span>🤖</span><b data-i="bot"></b><small data-i="bot_s"></small></button>
+<button class="tl" onclick="startRandom()"><span>🎲</span><b data-i="rand"></b><small data-i="rand_s"></small></button>
+<button class="tl" onclick="show('on')"><span>🌐</span><b data-i="online"></b><small data-i="online_s"></small></button>
+<button class="tl" onclick="lb();show('lb')"><span>🏆</span><b data-i="lead"></b><small data-i="lead_s"></small></button>
+<button class="tl" onclick="openGuide()"><span>📖</span><b data-i="guide"></b><small data-i="guide_s"></small></button>
+<button class="tl" onclick="prof();show('pr')"><span>👤</span><b data-i="prof"></b><small data-i="prof_s"></small></button>
+</div>
 <div class="row"><select id="lg" style="flex:1" onchange="setLang(this.value)"><option value="uz">O‘zbekcha</option><option value="ru">Русский</option><option value="en">English</option></select><button class="g sq" id="sb" onclick="togS()"></button></div></div>
 
 <div class="s" id="bot"><button class="g" onclick="show('m')" data-i="back"></button>
@@ -60,7 +84,7 @@ button:active{transform:scale(.97)}button.g{background:var(--card2);color:var(--
 <button class="big" onclick="host()"><span>➕</span><b data-i="create"></b></button>
 <div class="card" id="rm" style="display:none;text-align:center"><div data-i="wait"></div><div class="code" id="rc"></div><small data-i="roomhint"></small><button onclick="shareR()" data-i="share"></button></div>
 <div class="card"><input id="ri" maxlength="5"><button onclick="join($('ri').value)" data-i="join"></button></div>
-<div class="pill" id="ns" style="display:none;font-size:13px;color:var(--mut);white-space:pre-line"></div></div>
+</div>
 
 <div class="s" id="g">
 <div class="pbar"><div class="av" id="oav"></div><div><b id="opn"></b></div><span class="dot" id="d1"></span></div>
@@ -80,11 +104,12 @@ button:active{transform:scale(.97)}button.g{background:var(--card2);color:var(--
 <div class="s" id="gd"><button class="g" onclick="show('m')" data-i="back"></button><div class="card" id="gt"></div>
 <div class="row"><button class="g" onclick="gp(-1)">‹</button><button class="g" onclick="gp(1)">›</button></div></div>
 
+<div class="s" id="rnd"><div class="radar">♞</div><h2 id="rs"></h2><div class="pill" id="rt" style="font-size:22px">0s</div><button id="rb" class="big" style="display:none" onclick="show('bot')"><span>🤖</span><b data-i="bot"></b></button><button class="g" onclick="show('m')" data-i="cancel"></button></div>
 <div class="ov" id="ov" onclick="if(event.target===this)this.classList.remove('on')"><div class="md"><div id="oe"></div><h2 id="ot"></h2><button id="oa" onclick="again()" data-i="again"></button><button class="g" onclick="leave()" data-i="menu"></button></div></div>
 <div id="toast"></div>
 <script>
 // ===== SOZLAMA: bot username'ini yozing (@ siz) =====
-const BOT='YOUR_BOT_USERNAME';
+const BOT='uzb_chess_bot';
 const $=id=>document.getElementById(id),tg=window.Telegram?.WebApp;
 if(tg){tg.ready();tg.expand()}
 const user=tg?.initDataUnsafe?.user||{id:0,first_name:'Mehmon'};
@@ -103,6 +128,12 @@ Object.assign(T.en,{title:'Chess',sub:'Think. Move. Win.',again:'Play again',men
 Object.assign(T.uz,{photo:'Rasm tanlash',tgphoto:'Telegram rasmini olish',photook:'Rasm saqlandi',photoerr:'Rasmni o‘qib bo‘lmadi',nolib:'Onlayn kutubxona yuklanmadi. Internetni tekshiring',nobrk:'Serverlarga ulanib bo‘lmadi. Boshqa internetga (Wi-Fi/mobil) o‘ting'});
 Object.assign(T.ru,{photo:'Выбрать фото',tgphoto:'Взять фото из Telegram',photook:'Фото сохранено',photoerr:'Не удалось прочитать фото',nolib:'Онлайн-библиотека не загрузилась. Проверьте интернет',nobrk:'Нет связи с серверами. Смените интернет (Wi-Fi/мобильный)'});
 Object.assign(T.en,{photo:'Choose photo',tgphoto:'Use Telegram photo',photook:'Photo saved',photoerr:'Could not read the photo',nolib:'Online library failed to load. Check your internet',nobrk:'Cannot reach the servers. Try another connection (Wi-Fi/mobile)'});
+Object.assign(T.uz,{online:'Do‘st bilan o‘ynash',rand:'Tasodifiy raqib',seek:'Raqib qidirilmoqda…',nofound:'Hozircha hech kim topilmadi. Keyinroq urinib ko‘ring yoki bot bilan o‘ynang',cancel:'Bekor qilish',found:'Raqib topildi!',retry:'Raqib kelmadi, qayta qidirilmoqda…'});
+Object.assign(T.ru,{online:'Играть с другом',rand:'Случайный соперник',seek:'Ищем соперника…',nofound:'Пока никого нет. Попробуйте позже или сыграйте с ботом',cancel:'Отмена',found:'Соперник найден!',retry:'Соперник не пришёл, ищем снова…'});
+Object.assign(T.en,{online:'Play with a friend',rand:'Random opponent',seek:'Looking for an opponent…',nofound:'Nobody found yet. Try later or play the bot',cancel:'Cancel',found:'Opponent found!',retry:'Opponent did not show up, searching again…'});
+Object.assign(T.uz,{sub:'Telegram shaxmat mini ilovasi',bot_s:'Kompyuterga qarshi',rand_s:'Raqibni o‘zi topadi',online_s:'Xona kodi orqali',lead_s:'Mening statistikam',guide_s:'Boshlovchilar uchun',prof_s:'Nik va rasm'});
+Object.assign(T.ru,{sub:'Шахматы в Telegram',bot_s:'Против компьютера',rand_s:'Найдём соперника',online_s:'По коду комнаты',lead_s:'Моя статистика',guide_s:'Для новичков',prof_s:'Ник и фото'});
+Object.assign(T.en,{sub:'Telegram Chess Mini App',bot_s:'Against the computer',rand_s:'Finds an opponent',online_s:'By room code',lead_s:'My stats',guide_s:'For beginners',prof_s:'Nickname & photo'});
 const t=k=>T[lang][k]||k;
 let ac;function snd(k){if(!ld('snd',1))return;try{tg?.HapticFeedback?.impactOccurred('light');ac=ac||new AudioContext();const o=ac.createOscillator(),g=ac.createGain(),n=ac.currentTime;o.type='triangle';o.frequency.value={m:440,c:220,e:660}[k];g.gain.setValueAtTime(.2,n);g.gain.exponentialRampToValueAtTime(.001,n+.15);o.connect(g);g.connect(ac.destination);o.start();o.stop(n+.15)}catch{}}
 
@@ -158,7 +189,7 @@ function togS(){sv('snd',ld('snd',1)?0:1);ap()}
 function openGuide(){gi=0;gd();show('gd')}
 function menuP(){$('mn').textContent=P.name;setAv($('mav'),P.photo,P.name[0]||'?');const r=ld('rec',{})[P.name]||{w:0,d:0,l:0};$('ms').textContent=`🏆 ${r.w}  🤝 ${r.d}  ❌ ${r.l}`}
 function ap(){document.querySelectorAll('[data-i]').forEach(e=>e.textContent=t(e.dataset.i));$('ri').placeholder=t('code');$('pn').placeholder=t('name');$('ci').placeholder=t('chat');$('lg').value=lang;$('sb').textContent=ld('snd',1)?'🔊':'🔇';document.documentElement.lang=lang;menuP();if(G){if(G.mode==='bot')$('opn').textContent=t('l'+G.lvl);after(1)}}
-function show(id){document.querySelectorAll('.s').forEach(e=>e.classList.toggle('on',e.id===id));if(id==='m'){if(!G&&NET){closeNet();$('rm').style.display='none'}menuP()}window.scrollTo(0,0)}
+function show(id){document.querySelectorAll('.s').forEach(e=>e.classList.toggle('on',e.id===id));if(id==='m'){M.on=0;clearInterval(M.iv);if(!G&&NET){pubBye();closeNet();$('rm').style.display='none'}menuP()}window.scrollTo(0,0)}
 function newG(mode,me){return{st:initSt(),hist:[],mode,me,sel:-1,tg:[],over:false,last:null,opp:'',L:[],ck:false,pid:''}}
 function draw(){const bd=$('bd');bd.innerHTML='';const fl=G.me==='b';
 for(let i=0;i<64;i++){const s=fl?63-i:i,p=G.st.b[s],d=document.createElement('div'),r=s>>3,c=s&7,isT=G.tg.includes(s);
@@ -200,18 +231,17 @@ function leave(){if(G&&G.mode==='on')tx({k:'bye'});closeNet();G=null;$('ov').cla
 function pub(c,o){try{c.publish(c.rm,JSON.stringify({s:MY,...o}),{qos:1})}catch{}}
 function tx(o){if(NET&&NET.use)pub(NET.use,o)}
 function closeNet(){const n=NET;NET=null;ninfo();if(!n)return;clearInterval(n.iv);setTimeout(()=>n.cs.forEach(c=>{try{c.end()}catch{}}),300)}
-function ninfo(){const e=$('ns');if(!e)return;if(!NET){e.style.display='none';return}e.style.display='block';
-const bad=NET.cs.find(c=>c.er&&c.msg);e.textContent='📡 '+NET.cs.map(c=>c.nm+(c.up?' ✅':c.er?' ❌':' ⏳')).join(' · ')+(bad&&!NET.cs.some(c=>c.up)?'\n'+bad.nm+': '+String(bad.msg).slice(0,70):'')}
-function ntfy(room,onMsg,onUp){const nt='chessuz_v1_'+room,seen=new Set(),c={nm:'ntfy',rm:'',up:0,er:0,msg:'',
+function ninfo(){}
+function ntfy(room,onMsg,onUp,since){const nt='chessuz_v1_'+room,seen=new Set(),c={nm:'ntfy',rm:'',up:0,er:0,msg:'',
 publish(tp,p){fetch('https://ntfy.sh/'+nt,{method:'POST',body:p}).catch(e=>{c.msg=String(e&&e.message||e);ninfo()})},
 end(){try{c.es.close()}catch{}c.up=0},removeAllListeners(){},on(ev,f){if(ev==='close')c.oc=f}};
-try{const es=c.es=new EventSource('https://ntfy.sh/'+nt+'/sse?since=20s');
+try{const es=c.es=new EventSource('https://ntfy.sh/'+nt+'/sse?since='+(since||'20s'));
 es.onopen=()=>{c.up=1;c.er=0;ninfo();onUp(c)};
 es.onmessage=ev=>{try{const o=JSON.parse(ev.data);if(o.event!=='message'||seen.has(o.id))return;seen.add(o.id);const d=JSON.parse(o.message);if(d&&d.s&&d.s!==MY)onMsg(d,c)}catch{}};
 es.onerror=()=>{c.up=0;c.er=1;c.msg='no connection';ninfo();if(es.readyState===2&&c.oc)c.oc()}}catch(e){c.er=1;c.msg=e.message}
 return c}
-function netStart(room,onMsg,onUp){const N={cs:[],use:null,room,iv:0,tries:0};
-N.cs.push(ntfy(room,onMsg,onUp));
+function netStart(room,onMsg,onUp,since){const N={cs:[],use:null,room,iv:0,tries:0};
+N.cs.push(ntfy(room,onMsg,onUp,since));
 if(typeof mqtt==='undefined')N.cs.push({nm:'mqtt',er:1,msg:'library not loaded',end(){}});
 else BRK.forEach(u=>{let c;try{c=mqtt.connect(u,{connectTimeout:7000,reconnectPeriod:0,keepalive:20,will:{topic:TOP+room,payload:JSON.stringify({s:MY,k:'bye'}),qos:1}})}catch(e){return}
 c.nm=new URL(u).hostname.split('.').slice(-2,-1)[0];c.rm=TOP+room;N.cs.push(c);
@@ -219,7 +249,7 @@ c.on('connect',()=>c.subscribe(c.rm,{qos:1},e=>{if(!e){c.up=1;c.er=0;ninfo();onU
 c.on('message',(tp,b)=>{let d;try{d=JSON.parse(b.toString())}catch{return}if(d&&d.s&&d.s!==MY)onMsg(d,c)});
 c.on('error',e=>{c.er=1;c.msg=e&&e.message;ninfo()});c.on('close',()=>{c.up=0;ninfo()})});
 return N}
-function startOn(me,name,pid,c){NET.use=c;NET.cs.forEach(x=>{if(x!==c)try{x.end()}catch{}});clearInterval(NET.iv);
+function startOn(me,name,pid,c){M.on=0;clearInterval(M.iv);NET.use=c;NET.cs.forEach(x=>{if(x!==c)try{x.end()}catch{}});clearInterval(NET.iv);
 G=newG('on',me);G.pid=pid;G.opp=String(name||'?').slice(0,20);
 c.removeAllListeners('close');c.on('close',()=>{c.up=0;if(G&&NET&&NET.use===c&&!G.over){G.over=true;dots(0,0);$('st').textContent=t('neterr')}});
 begin(G.opp,1)}
@@ -228,17 +258,35 @@ if(d.k==='mv'){if(d.n===G.hist.length&&G.st.t!==G.me){const m=G.L.find(x=>x.f===
 else if(d.k==='ch')addC(String(d.x).slice(0,200),0);
 else if(d.k==='re'){if(!G.over)endG('w',t('win'))}
 else if(d.k==='bye'){if(!G.over)endG('w',t('left'))}}
-function host(){closeNet();const code=(Math.random().toString(36)+'00000').slice(2,7).toUpperCase();RC=code;let up=0;
+function host(c0){closeNet();const code=c0||(Math.random().toString(36)+'00000').slice(2,7).toUpperCase();RC=code;let up=0;
 $('rc').textContent=code;$('rm').style.display='block';
 const n=netStart(code,(d,c)=>{
 if(d.k==='join'){if(!G){startOn('w',d.n,d.s,c);tx({k:'hi',n:P.name})}else if(NET&&c===NET.use){if(d.s===G.pid)tx({k:'hi',n:P.name});else tx({k:'full'})}}
 else if(G&&NET&&c===NET.use)gmsg(d)},c=>{up=1});
-NET=n;ninfo();setTimeout(()=>{if(!up&&NET===n)toast(t('nobrk'))},9000)}
+NET=n;ninfo();setTimeout(()=>{if(!up&&NET===n)toast(t('nobrk'))},9000);if(M.on)setTimeout(()=>{if(M.on&&!G&&NET===n){toast(t('retry'));startRandom(1)}},12000)}
 function join(code){code=(code||'').trim().toUpperCase();if(code.length!==5)return toast(t('norm'));closeNet();toast(t('conn'));
 const n=netStart(code,(d,c)=>{
 if(!G){if(d.k==='hi')startOn('b',d.n,d.s,c);else if(d.k==='full'){toast(t('full'));closeNet()}}
 else if(NET&&c===NET.use)gmsg(d)},c=>pub(c,{k:'join',n:P.name}));
-NET=n;ninfo();n.iv=setInterval(()=>{if(G||NET!==n||++n.tries>6){clearInterval(n.iv);if(!G&&NET===n){toast(t(n.cs.some(c=>c.up)?'norm':'nobrk'));closeNet()}return}n.cs.forEach(c=>c.up&&pub(c,{k:'join',n:P.name}))},1500)}
+NET=n;ninfo();n.iv=setInterval(()=>{if(G||NET!==n||++n.tries>6){clearInterval(n.iv);if(!G&&NET===n){toast(t(n.cs.some(c=>c.up)?'norm':'nobrk'));closeNet();if(M.on)startRandom(1)}return}n.cs.forEach(c=>c.up&&pub(c,{k:'join',n:P.name}))},1500)}
+// ===== TASODIFIY RAQIB (umumiy lobbi) =====
+const M={on:0,iv:0,sec:0,paired:0,sk:{}};
+function pubBye(){if(NET&&NET.lobby)NET.cs.forEach(c=>c.up&&pub(c,{k:'bye'}))}
+function startRandom(keep){closeNet();clearInterval(M.iv);M.on=1;M.paired=0;M.sk={};if(!keep)M.sec=0;
+$('rs').textContent=t('seek');$('rb').style.display='none';$('rt').textContent=M.sec+'s';show('rnd');
+const n=netStart('LOBBY0',lobbyMsg,c=>pub(c,{k:'seek',n:P.name}),'2s');NET=n;n.lobby=1;ninfo();
+M.iv=setInterval(()=>{if(!M.on||NET!==n){clearInterval(M.iv);return}M.sec++;$('rt').textContent=M.sec+'s';
+if(M.sec%3===0)n.cs.forEach(c=>c.up&&pub(c,{k:'seek',n:P.name}));tryPair();
+if(M.sec>=90&&!M.paired){clearInterval(M.iv);M.on=0;pubBye();closeNet();$('rs').textContent=t('nofound');$('rb').style.display='block'}},1000)}
+function lobbyMsg(d){if(!M.on||M.paired)return;
+if(d.k==='seek')M.sk[d.s]={n:d.n,t:Date.now()};
+else if(d.k==='bye')delete M.sk[d.s];
+else if(d.k==='match'&&d.to===MY&&/^[A-Z0-9]{5}$/.test(d.room)){M.paired=1;toast(t('found'));join(d.room);return}
+tryPair()}
+function tryPair(){if(!M.on||M.paired||G||!NET||!NET.lobby)return;const now=Date.now(),ids=Object.keys(M.sk).filter(id=>now-M.sk[id].t<7000);
+if(!ids.length||ids.some(id=>id<MY))return;
+const to=ids.sort()[0],code=(Math.random().toString(36)+'00000').slice(2,7).toUpperCase();M.paired=1;delete M.sk[to];
+NET.cs.forEach(c=>c.up&&pub(c,{k:'match',to,room:code}));toast(t('found'));host(code)}
 function shareR(){const u=`https://t.me/${BOT}?startapp=${RC}`,l='https://t.me/share/url?url='+encodeURIComponent(u)+'&text='+encodeURIComponent('♟ '+RC);tg?tg.openTelegramLink(l):window.open(l)}
 function addC(x,me){const d=document.createElement('div');d.textContent=(me?P.name:G.opp)+': '+x;$('cl').appendChild(d);$('cl').scrollTop=1e5}
 function sendC(){const x=$('ci').value.trim();if(!x||!G||G.mode!=='on')return;tx({k:'ch',x});addC(x,1);$('ci').value=''}
