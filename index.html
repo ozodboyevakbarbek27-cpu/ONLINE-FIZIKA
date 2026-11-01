@@ -58,8 +58,9 @@ button:active{transform:scale(.97)}button.g{background:var(--card2);color:var(--
 
 <div class="s" id="on"><button class="g" onclick="show('m')" data-i="back"></button>
 <button class="big" onclick="host()"><span>➕</span><b data-i="create"></b></button>
-<div class="card" id="rm" style="display:none;text-align:center"><div data-i="wait"></div><div class="code" id="rc"></div><small data-i="roomhint"></small><div id="ns" style="margin-top:6px"></div><button onclick="shareR()" data-i="share"></button></div>
-<div class="card"><input id="ri" maxlength="5"><button onclick="join($('ri').value)" data-i="join"></button></div></div>
+<div class="card" id="rm" style="display:none;text-align:center"><div data-i="wait"></div><div class="code" id="rc"></div><small data-i="roomhint"></small><button onclick="shareR()" data-i="share"></button></div>
+<div class="card"><input id="ri" maxlength="5"><button onclick="join($('ri').value)" data-i="join"></button></div>
+<div class="pill" id="ns" style="display:none;font-size:13px;color:var(--mut);white-space:pre-line"></div></div>
 
 <div class="s" id="g">
 <div class="pbar"><div class="av" id="oav"></div><div><b id="opn"></b></div><span class="dot" id="d1"></span></div>
@@ -198,15 +199,26 @@ function leave(){if(G&&G.mode==='on')tx({k:'bye'});closeNet();G=null;$('ov').cla
 // ===== ONLAYN: ommaviy MQTT relay (4 ta broker parallel) =====
 function pub(c,o){try{c.publish(c.rm,JSON.stringify({s:MY,...o}),{qos:1})}catch{}}
 function tx(o){if(NET&&NET.use)pub(NET.use,o)}
-function closeNet(){const n=NET;NET=null;if(!n)return;clearInterval(n.iv);setTimeout(()=>n.cs.forEach(c=>{try{c.end()}catch{}}),300)}
+function closeNet(){const n=NET;NET=null;ninfo();if(!n)return;clearInterval(n.iv);setTimeout(()=>n.cs.forEach(c=>{try{c.end()}catch{}}),300)}
+function ninfo(){const e=$('ns');if(!e)return;if(!NET){e.style.display='none';return}e.style.display='block';
+const bad=NET.cs.find(c=>c.er&&c.msg);e.textContent='📡 '+NET.cs.map(c=>c.nm+(c.up?' ✅':c.er?' ❌':' ⏳')).join(' · ')+(bad&&!NET.cs.some(c=>c.up)?'\n'+bad.nm+': '+String(bad.msg).slice(0,70):'')}
+function ntfy(room,onMsg,onUp){const nt='chessuz_v1_'+room,seen=new Set(),c={nm:'ntfy',rm:'',up:0,er:0,msg:'',
+publish(tp,p){fetch('https://ntfy.sh/'+nt,{method:'POST',body:p}).catch(e=>{c.msg=String(e&&e.message||e);ninfo()})},
+end(){try{c.es.close()}catch{}c.up=0},removeAllListeners(){},on(ev,f){if(ev==='close')c.oc=f}};
+try{const es=c.es=new EventSource('https://ntfy.sh/'+nt+'/sse?since=20s');
+es.onopen=()=>{c.up=1;c.er=0;ninfo();onUp(c)};
+es.onmessage=ev=>{try{const o=JSON.parse(ev.data);if(o.event!=='message'||seen.has(o.id))return;seen.add(o.id);const d=JSON.parse(o.message);if(d&&d.s&&d.s!==MY)onMsg(d,c)}catch{}};
+es.onerror=()=>{c.up=0;c.er=1;c.msg='no connection';ninfo();if(es.readyState===2&&c.oc)c.oc()}}catch(e){c.er=1;c.msg=e.message}
+return c}
 function netStart(room,onMsg,onUp){const N={cs:[],use:null,room,iv:0,tries:0};
-BRK.forEach(u=>{let c;try{c=mqtt.connect(u,{connectTimeout:7000,reconnectPeriod:0,keepalive:20,will:{topic:TOP+room,payload:JSON.stringify({s:MY,k:'bye'}),qos:1}})}catch{return}
-c.rm=TOP+room;N.cs.push(c);
-c.on('connect',()=>c.subscribe(c.rm,{qos:1},e=>{if(!e){c.up=1;ninfo();onUp(c)}}));
+N.cs.push(ntfy(room,onMsg,onUp));
+if(typeof mqtt==='undefined')N.cs.push({nm:'mqtt',er:1,msg:'library not loaded',end(){}});
+else BRK.forEach(u=>{let c;try{c=mqtt.connect(u,{connectTimeout:7000,reconnectPeriod:0,keepalive:20,will:{topic:TOP+room,payload:JSON.stringify({s:MY,k:'bye'}),qos:1}})}catch(e){return}
+c.nm=new URL(u).hostname.split('.').slice(-2,-1)[0];c.rm=TOP+room;N.cs.push(c);
+c.on('connect',()=>c.subscribe(c.rm,{qos:1},e=>{if(!e){c.up=1;c.er=0;ninfo();onUp(c)}}));
 c.on('message',(tp,b)=>{let d;try{d=JSON.parse(b.toString())}catch{return}if(d&&d.s&&d.s!==MY)onMsg(d,c)});
-c.on('error',()=>{});c.on('close',()=>{c.up=0;ninfo()})});
+c.on('error',e=>{c.er=1;c.msg=e&&e.message;ninfo()});c.on('close',()=>{c.up=0;ninfo()})});
 return N}
-function ninfo(){const e=$('ns');if(e&&NET)e.textContent='📡 '+NET.cs.filter(c=>c.up).length+'/'+BRK.length}
 function startOn(me,name,pid,c){NET.use=c;NET.cs.forEach(x=>{if(x!==c)try{x.end()}catch{}});clearInterval(NET.iv);
 G=newG('on',me);G.pid=pid;G.opp=String(name||'?').slice(0,20);
 c.removeAllListeners('close');c.on('close',()=>{c.up=0;if(G&&NET&&NET.use===c&&!G.over){G.over=true;dots(0,0);$('st').textContent=t('neterr')}});
@@ -216,17 +228,17 @@ if(d.k==='mv'){if(d.n===G.hist.length&&G.st.t!==G.me){const m=G.L.find(x=>x.f===
 else if(d.k==='ch')addC(String(d.x).slice(0,200),0);
 else if(d.k==='re'){if(!G.over)endG('w',t('win'))}
 else if(d.k==='bye'){if(!G.over)endG('w',t('left'))}}
-function host(){if(typeof mqtt==='undefined')return toast(t('nolib'));closeNet();
-const code=(Math.random().toString(36)+'00000').slice(2,7).toUpperCase();RC=code;let up=0;
+function host(){closeNet();const code=(Math.random().toString(36)+'00000').slice(2,7).toUpperCase();RC=code;let up=0;
+$('rc').textContent=code;$('rm').style.display='block';
 const n=netStart(code,(d,c)=>{
-if(d.k==='join'){if(!G){startOn('w',d.n,d.s,c);tx({k:'hi',n:P.name})}else if(c===NET.use){if(d.s===G.pid)tx({k:'hi',n:P.name});else tx({k:'full'})}}
-else if(G&&NET&&c===NET.use)gmsg(d)},c=>{if(!up){up=1;$('rc').textContent=code;$('rm').style.display='block'}});
-NET=n;setTimeout(()=>{if(!up&&NET===n){toast(t('nobrk'));closeNet()}},9000)}
-function join(code){code=(code||'').trim().toUpperCase();if(code.length!==5)return toast(t('norm'));if(typeof mqtt==='undefined')return toast(t('nolib'));closeNet();toast(t('conn'));
+if(d.k==='join'){if(!G){startOn('w',d.n,d.s,c);tx({k:'hi',n:P.name})}else if(NET&&c===NET.use){if(d.s===G.pid)tx({k:'hi',n:P.name});else tx({k:'full'})}}
+else if(G&&NET&&c===NET.use)gmsg(d)},c=>{up=1});
+NET=n;ninfo();setTimeout(()=>{if(!up&&NET===n)toast(t('nobrk'))},9000)}
+function join(code){code=(code||'').trim().toUpperCase();if(code.length!==5)return toast(t('norm'));closeNet();toast(t('conn'));
 const n=netStart(code,(d,c)=>{
 if(!G){if(d.k==='hi')startOn('b',d.n,d.s,c);else if(d.k==='full'){toast(t('full'));closeNet()}}
 else if(NET&&c===NET.use)gmsg(d)},c=>pub(c,{k:'join',n:P.name}));
-NET=n;n.iv=setInterval(()=>{if(G||NET!==n||++n.tries>6){clearInterval(n.iv);if(!G&&NET===n){toast(t(n.cs.some(c=>c.up)?'norm':'nobrk'));closeNet()}return}n.cs.forEach(c=>c.up&&pub(c,{k:'join',n:P.name}))},1500)}
+NET=n;ninfo();n.iv=setInterval(()=>{if(G||NET!==n||++n.tries>6){clearInterval(n.iv);if(!G&&NET===n){toast(t(n.cs.some(c=>c.up)?'norm':'nobrk'));closeNet()}return}n.cs.forEach(c=>c.up&&pub(c,{k:'join',n:P.name}))},1500)}
 function shareR(){const u=`https://t.me/${BOT}?startapp=${RC}`,l='https://t.me/share/url?url='+encodeURIComponent(u)+'&text='+encodeURIComponent('♟ '+RC);tg?tg.openTelegramLink(l):window.open(l)}
 function addC(x,me){const d=document.createElement('div');d.textContent=(me?P.name:G.opp)+': '+x;$('cl').appendChild(d);$('cl').scrollTop=1e5}
 function sendC(){const x=$('ci').value.trim();if(!x||!G||G.mode!=='on')return;tx({k:'ch',x});addC(x,1);$('ci').value=''}
