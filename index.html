@@ -4,65 +4,127 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#090b12">
 <title>PORNO UC</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
 <style>
 *{box-sizing:border-box}
-body{margin:0;background:#090b12;color:#fff;font-family:Arial,sans-serif}
-header{padding:25px 18px;text-align:center;background:linear-gradient(135deg,#171d35,#10111b);border-bottom:1px solid #292e43}
-.logo{font-size:30px;font-weight:900;letter-spacing:2px;color:#ffd34e}
-header p{color:#aab0c5;font-size:13px}
-main{max-width:480px;margin:auto;padding:18px}
-.card{background:#151927;border:1px solid #292f43;border-radius:17px;padding:18px;margin-bottom:16px}
-h3{margin:0 0 15px;font-size:17px}
-label{display:block;color:#b9bfd1;font-size:13px;margin:12px 0 7px}
-select,input{width:100%;padding:14px;border-radius:10px;border:1px solid #343b51;background:#0d111c;color:white;font-size:15px}
-.price{font-size:25px;font-weight:bold;color:#ffd34e;margin-top:14px}
-.info{color:#aeb5c9;font-size:13px;line-height:1.6}
-button{width:100%;padding:15px;border:0;border-radius:11px;background:#ffd34e;color:#171717;font-size:16px;font-weight:bold;margin-top:14px}
-button:disabled{opacity:.5}
-#preview{display:none;max-width:100%;max-height:220px;margin-top:12px;border-radius:10px}
-#status{font-size:13px;line-height:1.5;margin-top:12px;color:#ffd34e}
-footer{text-align:center;color:#747c91;font-size:12px;padding:20px}
+body{
+  margin:0;background:#090b12;color:#fff;
+  font-family:Arial,sans-serif;
+}
+#intro{
+  position:fixed;inset:0;z-index:10;background:#090b12;
+  display:flex;align-items:center;justify-content:center;
+  flex-direction:column;animation:hideIntro 1s ease 1.8s forwards;
+}
+#intro h1{
+  color:#ffd34e;font-size:35px;letter-spacing:4px;
+  animation:logo 1s ease infinite alternate;
+}
+#intro p{color:#aaa}
+@keyframes logo{to{transform:scale(1.08);opacity:.7}}
+@keyframes hideIntro{to{opacity:0;visibility:hidden}}
+header{
+  text-align:center;padding:25px 15px;
+  background:#141827;border-bottom:1px solid #292f43;
+}
+.logo{font-size:29px;font-weight:900;color:#ffd34e;letter-spacing:2px}
+header p{color:#aeb5c9;font-size:13px;margin-bottom:0}
+main{max-width:480px;margin:auto;padding:16px}
+.card{
+  background:#151927;border:1px solid #292f43;
+  border-radius:18px;padding:19px;margin-bottom:16px;
+}
+h3{font-size:19px;margin:0 0 16px}
+label{display:block;color:#b9bfd1;font-size:14px;margin:13px 0 8px}
+input,select{
+  width:100%;padding:15px;border-radius:12px;
+  border:1px solid #343b51;background:#0d111c;
+  color:#fff;font-size:16px;outline:none;
+}
+input:focus,select:focus{border-color:#ffd34e}
+.price{font-size:27px;color:#ffd34e;font-weight:bold;margin-top:18px}
+.info{font-size:14px;color:#aeb5c9;line-height:1.7}
+.cardnumber{font-size:21px;font-weight:bold;letter-spacing:1px}
+button{
+  width:100%;padding:16px;margin-top:15px;
+  border:0;border-radius:12px;background:#ffd34e;
+  color:#111;font-size:16px;font-weight:bold;
+}
+button:active{transform:scale(.98)}
+#preview{
+  display:none;width:100%;max-height:250px;
+  object-fit:contain;margin-top:12px;border-radius:12px;
+}
+#status{font-size:13px;line-height:1.6;margin-top:12px;color:#ffd34e}
+footer{text-align:center;color:#737b90;font-size:12px;padding:20px}
 </style>
 </head>
+
 <body>
+
+<div id="intro">
+  <h1>PORNO UC</h1>
+  <p>UC TOP-UP SERVICE</p>
+</div>
+
 <header>
   <div class="logo">PORNO UC</div>
-  <p>PUBG Mobile UC TOP-UP</p>
+  <p>PUBG MOBILE UC TOP-UP</p>
 </header>
 
 <main>
+
   <section class="card">
     <h3>UC paketini tanlang</h3>
+
     <label>UC miqdori</label>
     <select id="package">
       <option value="60" data-price="12000">60 UC — 12 000 so‘m</option>
-      <option value="325" data-price="60000">325 UC — 60 000 so‘m</option>
-      <option value="660" data-price="120000">660 UC — 120 000 so‘m</option>
-      <option value="1800" data-price="300000">1800 UC — 300 000 so‘m</option>
     </select>
+
     <div class="price" id="price">12 000 so‘m</div>
+
     <label>PUBG Mobile ID</label>
-    <input id="playerId" type="text" placeholder="O‘yin ID raqamingiz">
+    <input
+      id="playerId"
+      type="text"
+      inputmode="numeric"
+      autocomplete="off"
+      maxlength="20"
+      placeholder="Faqat raqam kiriting"
+    >
+    <p class="info">ID raqamingizni xatosiz kiriting.</p>
   </section>
 
   <section class="card">
     <h3>To‘lov ma’lumotlari</h3>
+
     <p class="info">Karta raqami:</p>
-    <div style="font-size:21px;font-weight:bold;letter-spacing:1px">1111 1111 1111 1111</div>
+    <div class="cardnumber">1111 1111 1111 1111</div>
+
     <p class="info">Karta egasi: A.O.</p>
-    <p class="info">To‘lovni amalga oshirgach, chek rasmini quyida yuklang.</p>
+    <p class="info">
+      Tanlangan UC paketi uchun ko‘rsatilgan summani to‘lang.
+      Keyin chek rasmini yuboring.
+    </p>
   </section>
 
   <section class="card">
-    <h3>To‘lov chekini yuborish</h3>
-    <label>Chek rasmi</label>
+    <h3>Chekni yuborish</h3>
+
+    <label>To‘lov cheki rasmi</label>
     <input id="receipt" type="file" accept="image/*">
-    <img id="preview" alt="Chek rasmi ko‘rinishi">
-    <button id="send">Buyurtmani yuborish</button>
+
+    <img id="preview" alt="Chek rasmi">
+
+    <button id="send">Buyurtma yuborish</button>
+
     <div id="status"></div>
   </section>
+
 </main>
 
 <footer>PORNO UC • Buyurtmalar admin tekshiruvidan o‘tadi</footer>
@@ -72,58 +134,84 @@ const tg = window.Telegram?.WebApp;
 tg?.ready();
 tg?.expand();
 
-const pack = document.getElementById("package");
+const playerId = document.getElementById("playerId");
+const packageSelect = document.getElementById("package");
 const price = document.getElementById("price");
 const receipt = document.getElementById("receipt");
 const preview = document.getElementById("preview");
 const statusBox = document.getElementById("status");
+const sendButton = document.getElementById("send");
 
-function updatePrice(){
-  const option = pack.options[pack.selectedIndex];
-  price.textContent = Number(option.dataset.price).toLocaleString("uz-UZ")+" so‘m";
-}
-pack.addEventListener("change",updatePrice);
-
-receipt.addEventListener("change",()=>{
-  const file=receipt.files[0];
-  if(!file)return;
-  if(!file.type.startsWith("image/")){
-    statusBox.textContent="Faqat rasm faylini tanlang.";
-    receipt.value="";
-    return;
-  }
-  preview.src=URL.createObjectURL(file);
-  preview.style.display="block";
+// PUBG ID: faqat raqam
+playerId.addEventListener("input", function(){
+  this.value = this.value.replace(/[^0-9]/g, "");
 });
 
-document.getElementById("send").addEventListener("click",async()=>{
-  const playerId=document.getElementById("playerId").value.trim();
-  const file=receipt.files[0];
-  const option=pack.options[pack.selectedIndex];
+// Narxni ko‘rsatish
+function updatePrice(){
+  const selected = packageSelect.options[packageSelect.selectedIndex];
+  price.textContent =
+    Number(selected.dataset.price).toLocaleString("uz-UZ") + " so‘m";
+}
+packageSelect.addEventListener("change", updatePrice);
 
-  if(!playerId){statusBox.textContent="PUBG ID raqamingizni kiriting.";return;}
-  if(!file){statusBox.textContent="Chek rasmini tanlang.";return;}
+// Chek rasmini ko‘rsatish
+receipt.addEventListener("change", function(){
+  const file = this.files[0];
 
-  const user=tg?.initDataUnsafe?.user;
-  if(!user?.id){
-    statusBox.textContent="Mini App'ni Telegram ichidan oching.";
+  if(!file) return;
+
+  if(!file.type.startsWith("image/")){
+    statusBox.textContent = "Faqat rasm faylini tanlang.";
+    this.value = "";
+    preview.style.display = "none";
     return;
   }
 
-  const order={
-    telegram_user_id:user.id,
-    telegram_username:user.username||"",
-    player_id:playerId,
-    uc:pack.value,
-    amount:option.dataset.price
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = "block";
+  statusBox.textContent = "Chek rasmi tanlandi.";
+});
+
+// Buyurtma
+sendButton.addEventListener("click", function(){
+  const id = playerId.value.trim();
+  const file = receipt.files[0];
+  const selected = packageSelect.options[packageSelect.selectedIndex];
+  const user = tg?.initDataUnsafe?.user;
+
+  if(!/^[0-9]{1,20}$/.test(id)){
+    statusBox.textContent = "PUBG ID faqat raqamlardan iborat bo‘lishi kerak.";
+    playerId.focus();
+    return;
+  }
+
+  if(!file){
+    statusBox.textContent = "Avval chek rasmini tanlang.";
+    return;
+  }
+
+  if(!user?.id){
+    statusBox.textContent = "Mini App'ni Telegram ichidan oching.";
+    return;
+  }
+
+  const order = {
+    telegram_user_id: user.id,
+    telegram_username: user.username || "",
+    player_id: id,
+    uc: packageSelect.value,
+    amount: selected.dataset.price
   };
 
-  statusBox.textContent=
-    "Buyurtma ma’lumotlari tayyor. Chekni adminga yuborish uchun backend ulanishi hali sozlanmagan.";
+  console.log("Buyurtma ma’lumotlari:", order);
 
-  console.log("Order data:",order);
+  statusBox.textContent =
+    "Buyurtma ma’lumotlari tayyor. Chekni adminga yuborish uchun backend ulanishi kerak.";
+
   tg?.HapticFeedback?.notificationOccurred("success");
 });
 </script>
+
 </body>
 </html>
