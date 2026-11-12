@@ -1,28 +1,31 @@
 """
-PORNO UC - Telegram bot + Mini App (bitta fayl)
-Ishga tushirish:
-    pip install aiohttp
-    BOT_TOKEN=... python bot.py   (token hostingda Environment Variables'ga yoziladi)
+PORNO UC - Telegram bot + Mini App + Server (HAMMASI BITTA FAYLDA)
 
-WEBAPP_URL - HTTPS bo'lishi shart (hosting yoki ngrok / cloudflared).
-Admin (@okeni_tanimadingmi) botga bir marta /start bosishi kerak,
-shunda bot uning ID sini avtomatik eslab qoladi.
+Ishga tushirish (Render "Web Service" yoki boshqa Python hosting):
+    pip install aiohttp
+    python bot.py
+Environment Variables:  BOT_TOKEN = BotFather tokeni
+(WEBAPP_URL ixtiyoriy: Render manzilni o'zi beradi)
+
+Admin (@okeni_tanimadingmi) botga bir marta /start bosishi kerak.
 """
 import os, json, hmac, hashlib, asyncio, time, html
 from urllib.parse import parse_qsl
 from aiohttp import web, ClientSession, FormData
 
-# Token va URL kodga yozilmaydi: hostingda Environment Variables orqali beriladi.
-# WEBAPP_URL berilmasa, Render o'zining manzilini avtomatik beradi (RENDER_EXTERNAL_URL).
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 WEBAPP_URL = (os.getenv("WEBAPP_URL") or os.getenv("RENDER_EXTERNAL_URL") or "").strip().rstrip("/")
 if not BOT_TOKEN:
     raise SystemExit("BOT_TOKEN topilmadi: hostingda Environment Variables ga BOT_TOKEN qo'shing")
+
 ADMIN_USERNAME = "okeni_tanimadingmi"
 PORT = int(os.getenv("PORT", "8080"))
 CARD_NUMBER = "1111 1111 1111 1111"
 CARD_HOLDER = "A O"
 MIN_AMOUNT = 1000
+# (UC miqdori, narxi so'mda) - narxlarni o'zingizga moslab o'zgartiring
+PACKS = [(60, 12000), (325, 60000), (660, 120000),
+         (1800, 300000), (3850, 600000), (8100, 1200000)]
 DB_FILE = "db.json"
 API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
@@ -46,6 +49,9 @@ def get_user(u):
     DB["users"][uid]["username"] = u.get("username", "")
     save_db()
     return DB["users"][uid]
+
+def fmt(n):
+    return f"{n:,}".replace(",", " ")
 
 # ---------------- Telegram helpers ----------------
 async def tg(method, data=None, files=None):
@@ -76,6 +82,12 @@ def check_init_data(init_data):
     except Exception:
         return None
 
+def history_of(uid):
+    items = [dict(id=k, **{x: v[x] for x in ("type", "amount", "status", "label", "ts") if x in v})
+             for k, v in DB["requests"].items() if v["user_id"] == uid]
+    items.sort(key=lambda x: x.get("ts", 0), reverse=True)
+    return items[:20]
+
 # ---------------- API ----------------
 async def api_me(request):
     body = await request.json()
@@ -84,9 +96,9 @@ async def api_me(request):
         return web.json_response({"error": "auth"}, status=401)
     user = get_user(u)
     return web.json_response({
-        "name": u.get("first_name", ""), "balance": user["balance"],
+        "id": u["id"], "name": u.get("first_name", ""), "balance": user["balance"],
         "blocked": user["blocked"], "card": CARD_NUMBER, "holder": CARD_HOLDER,
-        "min": MIN_AMOUNT})
+        "min": MIN_AMOUNT, "packs": PACKS, "history": history_of(u["id"])})
 
 async def api_topup(request):
     form = await request.post()
@@ -113,14 +125,14 @@ async def api_topup(request):
 
     DB["counter"] += 1
     rid = str(DB["counter"])
-    DB["requests"][rid] = {"user_id": u["id"], "amount": amount, "status": "pending"}
+    DB["requests"][rid] = {"user_id": u["id"], "type": "topup", "amount": amount,
+                           "status": "pending", "label": "Hisob to'ldirish", "ts": int(time.time())}
     save_db()
-
     uname = f"@{u['username']}" if u.get("username") else "yo'q"
     caption = (f"💳 <b>Yangi to'lov #{rid}</b>\n"
                f"👤 {html.escape(u.get('first_name',''))} ({uname})\n"
                f"🆔 <code>{u['id']}</code>\n"
-               f"💰 Summa: <b>{amount:,}</b> so'm".replace(",", " "))
+               f"💰 Summa: <b>{fmt(amount)}</b> so'm")
     kb = {"inline_keyboard": [[
         {"text": "✅ Tasdiqlash", "callback_data": f"ok:{rid}"},
         {"text": "❌ Soxta (bloklash)", "callback_data": f"fake:{rid}"}]]}
@@ -129,60 +141,127 @@ async def api_topup(request):
                     "parse_mode": "HTML", "reply_markup": kb},
                    files={"photo": ("chek.jpg", content, photo.content_type or "image/jpeg")})
     if not res.get("ok"):
+        DB["requests"][rid]["status"] = "cancel"
+        save_db()
         return web.json_response({"error": "Chekni yuborib bo'lmadi"}, status=500)
     return web.json_response({"ok": True, "id": rid})
+
+async def api_order(request):
+    body = await request.json()
+    u = check_init_data(body.get("initData", ""))
+    if not u:
+        return web.json_response({"error": "Avtorizatsiya xatosi"}, status=401)
+    user = get_user(u)
+    if user["blocked"]:
+        return web.json_response({"error": "blocked"}, status=403)
+    try:
+        uc, price = PACKS[int(body.get("pack"))]
+    except Exception:
+        return web.json_response({"error": "Paket topilmadi"}, status=400)
+    pid = str(body.get("pubg_id", "")).strip()
+    if not (pid.isdigit() and 5 <= len(pid) <= 12):
+        return web.json_response({"error": "PUBG ID noto'g'ri (faqat raqam)"}, status=400)
+    if not DB["admin_id"]:
+        return web.json_response({"error": "Admin hali botni ishga tushirmagan"}, status=503)
+    if user["balance"] < price:
+        return web.json_response({"error": "Balans yetarli emas. Avval hisobni to'ldiring"}, status=400)
+
+    user["balance"] -= price
+    DB["counter"] += 1
+    rid = str(DB["counter"])
+    DB["requests"][rid] = {"user_id": u["id"], "type": "order", "amount": price, "status": "pending",
+                           "label": f"{uc} UC · ID {pid}", "ts": int(time.time())}
+    save_db()
+    uname = f"@{u['username']}" if u.get("username") else "yo'q"
+    text = (f"🛒 <b>Yangi buyurtma #{rid}</b>\n"
+            f"👤 {html.escape(u.get('first_name',''))} ({uname})\n"
+            f"🎮 PUBG ID: <code>{pid}</code>\n"
+            f"💎 Paket: <b>{uc} UC</b>\n"
+            f"💰 To'langan: {fmt(price)} so'm")
+    kb = {"inline_keyboard": [[
+        {"text": "✅ Bajarildi", "callback_data": f"done:{rid}"},
+        {"text": "↩️ Bekor (pulni qaytarish)", "callback_data": f"cancel:{rid}"}]]}
+    res = await tg("sendMessage", {"chat_id": DB["admin_id"], "text": text,
+                                   "parse_mode": "HTML", "reply_markup": kb})
+    if not res.get("ok"):
+        user["balance"] += price
+        DB["requests"][rid]["status"] = "cancel"
+        save_db()
+        return web.json_response({"error": "Buyurtmani yuborib bo'lmadi"}, status=500)
+    return web.json_response({"ok": True, "balance": user["balance"]})
 
 async def index(request):
     return web.Response(text=INDEX_HTML, content_type="text/html")
 
+@web.middleware
+async def cors(request, handler):
+    resp = web.Response() if request.method == "OPTIONS" else await handler(request)
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    resp.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+    return resp
+
 # ---------------- Bot polling ----------------
+async def handle_callback(cq):
+    if cq["from"]["id"] != DB.get("admin_id"):
+        await tg("answerCallbackQuery", {"callback_query_id": cq["id"], "text": "Ruxsat yo'q"})
+        return
+    action, rid = cq["data"].split(":")
+    req = DB["requests"].get(rid)
+    if not req or req["status"] != "pending":
+        await tg("answerCallbackQuery", {"callback_query_id": cq["id"], "text": "Allaqachon ko'rib chiqilgan"})
+        return
+    uid = str(req["user_id"])
+    user = DB["users"].setdefault(uid, {"balance": 0, "blocked": False})
+    amount, kind = req["amount"], req.get("type", "topup")
+    if kind == "topup" and action == "ok":
+        user["balance"] += amount
+        status = f"✅ TASDIQLANDI (+{fmt(amount)} so'm)"
+        note = f"✅ Hisobingiz {fmt(amount)} so'mga to'ldirildi!"
+    elif kind == "topup" and action == "fake":
+        user["blocked"] = True
+        status = "❌ SOXTA — foydalanuvchi bloklandi"
+        note = "🚫 Soxta chek yuborganingiz uchun hisobingiz bloklandi."
+    elif kind == "order" and action == "done":
+        status = "✅ BAJARILDI"
+        note = f"✅ Buyurtmangiz bajarildi: {req['label']}"
+    elif kind == "order" and action == "cancel":
+        user["balance"] += amount
+        status = "↩️ BEKOR QILINDI (pul qaytarildi)"
+        note = f"↩️ Buyurtma bekor qilindi, {fmt(amount)} so'm balansingizga qaytarildi."
+    else:
+        await tg("answerCallbackQuery", {"callback_query_id": cq["id"], "text": "Noto'g'ri amal"})
+        return
+    req["status"] = action
+    save_db()
+    await tg("answerCallbackQuery", {"callback_query_id": cq["id"], "text": status})
+    msg = cq["message"]
+    base = {"chat_id": msg["chat"]["id"], "message_id": msg["message_id"],
+            "reply_markup": {"inline_keyboard": []}}
+    if msg.get("photo"):
+        await tg("editMessageCaption", {**base, "caption": msg.get("caption", "") + f"\n\n{status}"})
+    else:
+        await tg("editMessageText", {**base, "text": msg.get("text", "") + f"\n\n{status}"})
+    await tg("sendMessage", {"chat_id": req["user_id"], "text": note})
+
 async def handle_update(up):
     if "message" in up:
-        m = up["message"]
-        frm = m["from"]
-        text = m.get("text", "")
+        frm = up["message"]["from"]
+        text = up["message"].get("text", "")
         if text.startswith("/start"):
-            if (frm.get("username", "").lower() == ADMIN_USERNAME.lower()):
+            if frm.get("username", "").lower() == ADMIN_USERNAME.lower():
                 DB["admin_id"] = frm["id"]
                 save_db()
                 await tg("sendMessage", {"chat_id": frm["id"],
-                         "text": "✅ Admin sifatida ulandingiz. Cheklar shu yerga keladi."})
+                         "text": "✅ Admin sifatida ulandingiz. Cheklar va buyurtmalar shu yerga keladi."})
             get_user(frm)
-            kb = {"inline_keyboard": [[{"text": "🎮 PORNO UC ni ochish",
+            kb = {"inline_keyboard": [[{"text": "💎 PORNO UC ni ochish",
                                         "web_app": {"url": WEBAPP_URL or "https://telegram.org"}}]]}
             await tg("sendMessage", {"chat_id": frm["id"],
-                     "text": "👋 PORNO UC ga xush kelibsiz!\nHisobni to'ldirish va UC xarid qilish uchun pastdagi tugmani bosing.",
+                     "text": "👋 PORNO UC ga xush kelibsiz!\nUC xarid qilish va hisobni to'ldirish uchun pastdagi tugmani bosing.",
                      "reply_markup": kb})
     elif "callback_query" in up:
-        cq = up["callback_query"]
-        if cq["from"]["id"] != DB.get("admin_id"):
-            await tg("answerCallbackQuery", {"callback_query_id": cq["id"], "text": "Ruxsat yo'q"})
-            return
-        action, rid = cq["data"].split(":")
-        req = DB["requests"].get(rid)
-        if not req or req["status"] != "pending":
-            await tg("answerCallbackQuery", {"callback_query_id": cq["id"], "text": "Allaqachon ko'rib chiqilgan"})
-            return
-        uid = str(req["user_id"])
-        user = DB["users"].setdefault(uid, {"balance": 0, "blocked": False})
-        amount = req["amount"]
-        if action == "ok":
-            req["status"] = "ok"
-            user["balance"] += amount
-            status = f"✅ TASDIQLANDI (+{amount} so'm)"
-            note = f"✅ Hisobingiz {amount:,} so'mga to'ldirildi!".replace(",", " ")
-        else:
-            req["status"] = "fake"
-            user["blocked"] = True
-            status = "❌ SOXTA — foydalanuvchi bloklandi"
-            note = "🚫 Soxta chek yuborganingiz uchun hisobingiz bloklandi."
-        save_db()
-        await tg("answerCallbackQuery", {"callback_query_id": cq["id"], "text": status})
-        await tg("editMessageCaption", {
-            "chat_id": cq["message"]["chat"]["id"], "message_id": cq["message"]["message_id"],
-            "caption": (cq["message"].get("caption", "") + f"\n\n{status}"),
-            "reply_markup": {"inline_keyboard": []}})
-        await tg("sendMessage", {"chat_id": req["user_id"], "text": note})
+        await handle_callback(up["callback_query"])
 
 async def poll():
     offset = 0
@@ -202,7 +281,6 @@ async def poll():
 
 async def on_start(app):
     if WEBAPP_URL:
-        # BotFather'da sozlash shart emas: menyu tugmasi avtomatik o'rnatiladi
         await tg("setChatMenuButton", {"menu_button": {"type": "web_app", "text": "PORNO UC",
                                                          "web_app": {"url": WEBAPP_URL}}})
     app["poller"] = asyncio.create_task(poll())
@@ -216,146 +294,189 @@ INDEX_HTML = r"""<!DOCTYPE html>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
-:root{--bg:#09090c;--card:#14141b;--line:#2a1d24;--red:#e0393e;--pur:#7c3aed;--txt:#fff;--mut:#8b8b99}
-body{background:var(--bg);color:var(--txt);font-family:-apple-system,Segoe UI,Roboto,sans-serif;min-height:100vh;padding-bottom:100px;overflow-x:hidden}
-/* splash */
-#splash{position:fixed;inset:0;background:var(--bg);z-index:99;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .6s,visibility .6s}
-#splash.hide{opacity:0;visibility:hidden}
-.logo{position:relative;width:130px;height:130px}
-.logo .ring{position:absolute;inset:0;border-radius:50%;border:3px solid transparent}
-.r1{border-top-color:var(--red)!important;border-left-color:var(--red)!important;animation:spin 1.6s linear infinite}
-.r2{inset:10px!important;border-bottom-color:#2dd4a7!important;border-right-color:#2dd4a7!important;animation:spin 2.2s linear infinite reverse}
-.logo .core{position:absolute;inset:22px;border-radius:50%;background:#0e1420;display:flex;align-items:center;justify-content:center;animation:pulse 1.8s ease-in-out infinite}
-.logo svg{width:42px;fill:#b44}
-.sname{margin-top:34px;font-size:26px;font-weight:800;letter-spacing:4px;color:#aaa;animation:glow 2s ease-in-out infinite}
-.sload{position:absolute;bottom:60px;text-align:center;color:var(--mut);letter-spacing:4px;font-size:13px}
-.bar{width:140px;height:3px;background:#1c1c25;border-radius:3px;margin:12px auto 0;overflow:hidden}
-.bar i{display:block;height:100%;width:40%;background:linear-gradient(90deg,var(--red),var(--pur));border-radius:3px;animation:slide 1.2s ease-in-out infinite}
+:root{--bg:#070b16;--card:rgba(255,255,255,.06);--line:rgba(255,255,255,.1);--c1:#22d3ee;--c2:#a3e635;--gold:#fbbf24;--txt:#f1f5f9;--mut:#8a94a8;--red:#fb4b5c}
+body{background:radial-gradient(900px 500px at 80% -10%,#10304a55,transparent),radial-gradient(700px 500px at -10% 40%,#2a1a5a44,transparent),var(--bg);color:var(--txt);font-family:-apple-system,Segoe UI,Roboto,sans-serif;min-height:100vh;padding-bottom:110px;overflow-x:hidden}
+/* ===== intro ===== */
+#splash{position:fixed;inset:0;background:var(--bg);z-index:99;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .7s,transform .7s,visibility .7s}
+#splash.hide{opacity:0;visibility:hidden;transform:scale(1.15)}
+.hex{position:relative;width:170px;height:170px;display:flex;align-items:center;justify-content:center}
+.hex i{position:absolute;inset:0;border-radius:50%;border:2px solid transparent}
+.hex i:nth-child(1){border-top-color:var(--c1);border-bottom-color:var(--c1);animation:spin 2s linear infinite}
+.hex i:nth-child(2){inset:14px;border-left-color:var(--c2);border-right-color:var(--c2);animation:spin 1.4s linear infinite reverse}
+.hex i:nth-child(3){inset:30px;border-top-color:var(--gold);animation:spin .9s linear infinite}
+.coin{font-size:54px;animation:float 2s ease-in-out infinite;filter:drop-shadow(0 0 18px #fbbf24aa)}
+.sname{margin-top:30px;font-size:34px;font-weight:900;letter-spacing:6px;background:linear-gradient(90deg,var(--c1),var(--c2),var(--c1));background-size:200%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shine 2.4s linear infinite}
+.sub{margin-top:8px;color:var(--mut);font-size:13px;letter-spacing:3px;min-height:18px}
+.pbar{width:200px;height:4px;background:#ffffff14;border-radius:4px;margin-top:26px;overflow:hidden}
+.pbar b{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--c1),var(--c2));transition:width .15s}
+.pct{margin-top:10px;font-weight:800;color:var(--c1);font-size:15px}
+.sparks span{position:absolute;width:4px;height:4px;border-radius:50%;background:var(--c1);opacity:0;animation:spark 3s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-@keyframes pulse{50%{transform:scale(.92)}}
-@keyframes glow{50%{color:#fff;text-shadow:0 0 18px rgba(224,57,62,.7)}}
-@keyframes slide{0%{margin-left:-40%}100%{margin-left:100%}}
-/* main */
+@keyframes float{50%{transform:translateY(-8px) scale(1.06)}}
+@keyframes shine{to{background-position:200% 0}}
+@keyframes spark{0%{opacity:0;transform:translateY(40px)}30%{opacity:1}100%{opacity:0;transform:translateY(-220px)}}
+/* ===== layout ===== */
 .wrap{padding:16px;max-width:520px;margin:0 auto}
-.hello{color:var(--mut);font-size:13px}
-.uname{font-size:30px;font-weight:900;margin-bottom:14px}
-.bal{background:linear-gradient(135deg,#3b1a4a,#2a1220);border:1px solid #5b2a55;border-radius:22px;padding:20px;display:flex;align-items:center;justify-content:space-between}
-.bal small{color:var(--mut);letter-spacing:2px;font-size:12px}
-.bal b{font-size:34px;display:block;margin-top:4px}
-.bal b span{font-size:14px;color:var(--mut);font-weight:500}
-.btn{border:0;color:#fff;font-weight:700;font-size:16px;padding:14px 22px;border-radius:14px;background:linear-gradient(90deg,var(--red),var(--pur));cursor:pointer}
-.btn:active{transform:scale(.97)}
-.help{margin-top:14px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;text-align:center;font-weight:700;color:#ddd}
-.banner{margin-top:16px;border-radius:22px;padding:34px 20px;background:linear-gradient(120deg,#2a0f14,#1b1030);border:1px solid #3a2236;position:relative;overflow:hidden}
-.banner:before{content:"PORNO UC";position:absolute;right:-10px;top:-6px;font-size:70px;font-weight:900;color:rgba(255,255,255,.05)}
-.tag{display:inline-block;background:#6a2a33;color:#ffb3b8;font-size:12px;font-weight:700;padding:5px 12px;border-radius:8px;margin-bottom:10px}
-.banner h3{font-size:20px}.banner p{color:#bbb;font-size:14px;margin-top:6px}
-.sec{display:flex;justify-content:space-between;align-items:center;margin:26px 0 12px}
-.sec h2{font-size:24px}.sec a{color:var(--red);font-weight:700}
-.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-.g{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:20px 10px;text-align:center;font-weight:700;cursor:pointer}
-.g .ic{font-size:40px;margin-bottom:8px}
-.g:active{transform:scale(.97)}
-.nav{position:fixed;bottom:0;left:0;right:0;background:#0d0d12;border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:10px 0 14px}
-.nav div{text-align:center;color:var(--mut);font-size:12px;width:20%}
-.nav div.on{color:var(--red);font-weight:700}.nav span{display:block;font-size:22px}
-.plus{position:fixed;left:50%;bottom:34px;transform:translateX(-50%);width:68px;height:68px;border-radius:50%;background:var(--red);border:6px solid #0d0d12;font-size:36px;color:#fff;box-shadow:0 0 22px rgba(224,57,62,.6)}
-/* modal */
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;display:none;align-items:flex-end}
+.top{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.ava{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,var(--c1),var(--c2));display:flex;align-items:center;justify-content:center;font-weight:900;color:#06222b;font-size:20px}
+.top .n{font-weight:800;font-size:17px}.top .s{color:var(--mut);font-size:12px}
+.chip{margin-left:auto;background:var(--card);border:1px solid var(--line);padding:8px 12px;border-radius:999px;font-weight:800;font-size:13px}
+.tab{display:none}.tab.on{display:block;animation:fade .35s}
+@keyframes fade{from{opacity:0;transform:translateY(10px)}}
+.hero{border-radius:26px;padding:22px;background:linear-gradient(135deg,#0e3a4d,#1b1a52 60%,#3a1a5a);border:1px solid #ffffff1c;position:relative;overflow:hidden}
+.hero:after{content:"💎";position:absolute;right:-14px;bottom:-26px;font-size:120px;opacity:.12}
+.hero small{color:#b6c3d8;letter-spacing:3px;font-size:11px}
+.hero .amt{font-size:38px;font-weight:900;margin:6px 0 16px}.hero .amt span{font-size:15px;color:#b6c3d8;font-weight:600}
+.btn{border:0;color:#04141a;font-weight:800;font-size:15px;padding:14px 20px;border-radius:14px;background:linear-gradient(90deg,var(--c1),var(--c2));cursor:pointer}
+.btn:active{transform:scale(.97)}.btn.ghost{background:#ffffff14;color:#fff}
+.btns{display:flex;gap:10px}.btns .btn{flex:1}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 8px;text-align:center}
+.stat b{display:block;font-size:19px}.stat span{font-size:11px;color:var(--mut)}
+.ticker{margin-top:14px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;font-size:13px;color:#cfd8e6;overflow:hidden;white-space:nowrap}
+.ticker div{display:inline-block;padding-left:100%;animation:mq 18s linear infinite}
+@keyframes mq{to{transform:translateX(-100%)}}
+h2.t{font-size:20px;margin:22px 0 12px;display:flex;justify-content:space-between;align-items:center}
+h2.t a{font-size:13px;color:var(--c1);font-weight:700}
+.packs{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.pack{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:18px 12px;text-align:center;position:relative;cursor:pointer;transition:.2s}
+.pack:active{transform:scale(.96)}
+.pack .u{font-size:30px;font-weight:900;color:var(--gold)}.pack .u small{font-size:13px;color:#d9b85a}
+.pack .p{margin-top:6px;font-weight:700}
+.pack .badge{position:absolute;top:8px;right:8px;background:var(--red);font-size:10px;font-weight:800;padding:3px 7px;border-radius:8px}
+.pack .gem{font-size:30px;display:block;margin-bottom:4px}
+.hist{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:10px}
+.hist .ic{font-size:24px}.hist .m{flex:1}.hist .m b{display:block;font-size:14px}.hist .m span{font-size:12px;color:var(--mut)}
+.st{font-size:11px;font-weight:800;padding:4px 9px;border-radius:8px;background:#ffffff14}
+.st.ok,.st.done{color:var(--c2)}.st.pending{color:var(--gold)}.st.fake,.st.cancel{color:var(--red)}
+.empty{text-align:center;color:var(--mut);padding:40px 0}
+.prow{display:flex;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--line)}.prow span{color:var(--mut)}
+.nav{position:fixed;bottom:0;left:0;right:0;background:#0a0f1dee;backdrop-filter:blur(14px);border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:10px 0 14px}
+.nav div{text-align:center;color:var(--mut);font-size:11px;width:20%;cursor:pointer}
+.nav div.on{color:var(--c1);font-weight:800}.nav span{display:block;font-size:22px}
+.fab{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--c1),var(--c2));border:5px solid var(--bg);font-size:28px;box-shadow:0 0 24px #22d3ee88}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:50;display:none;align-items:flex-end}
 .modal.show{display:flex}
-.sheet{background:#111118;width:100%;border-radius:26px 26px 0 0;padding:22px 18px 28px;max-height:92vh;overflow:auto;animation:up .3s}
+.sheet{background:#0e1424;border-top:1px solid var(--line);width:100%;border-radius:26px 26px 0 0;padding:22px 18px 28px;max-height:92vh;overflow:auto;animation:up .3s}
 @keyframes up{from{transform:translateY(60px);opacity:0}}
-.sheet h3{font-size:22px;margin-bottom:14px}
-.cardbox{background:linear-gradient(135deg,#3b1a4a,#7a1f2b);border-radius:18px;padding:18px;margin-bottom:14px}
-.cardbox small{opacity:.7;font-size:12px}
+.sheet h3{font-size:21px;margin-bottom:14px}
+.close{float:right;background:#ffffff14;border:0;color:#fff;width:34px;height:34px;border-radius:50%}
+.cardbox{background:linear-gradient(135deg,#0e3a4d,#3a1a5a);border-radius:18px;padding:18px;margin-bottom:6px}
+.cardbox small{opacity:.7;font-size:11px;letter-spacing:2px}
 .cn{font-size:23px;font-weight:800;letter-spacing:2px;margin:6px 0}
 .row{display:flex;justify-content:space-between;align-items:center}
-.cp{background:rgba(255,255,255,.18);border:0;color:#fff;padding:8px 14px;border-radius:10px;font-weight:700}
+.cp{background:#ffffff26;border:0;color:#fff;padding:8px 14px;border-radius:10px;font-weight:700}
 label{display:block;color:var(--mut);font-size:13px;margin:14px 0 6px}
-input[type=number]{width:100%;background:var(--card);border:1px solid var(--line);color:#fff;border-radius:14px;padding:15px;font-size:18px;outline:none}
-.up{border:2px dashed #3a2a44;border-radius:16px;padding:22px;text-align:center;color:var(--mut);cursor:pointer}
+input[type=number],input[type=text]{width:100%;background:#ffffff0d;border:1px solid var(--line);color:#fff;border-radius:14px;padding:15px;font-size:18px;outline:none}
+input:focus{border-color:var(--c1)}
+.chips{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}.chips b{background:#ffffff12;border-radius:10px;padding:7px 12px;font-size:13px;cursor:pointer}
+.up{border:2px dashed #ffffff30;border-radius:16px;padding:22px;text-align:center;color:var(--mut);cursor:pointer}
 .up img{max-width:100%;max-height:220px;border-radius:12px}
-.close{float:right;background:#1c1c25;border:0;color:#fff;width:34px;height:34px;border-radius:50%;font-size:16px}
-#send{width:100%;margin-top:18px}
-#send:disabled{opacity:.5}
-.toast{position:fixed;top:18px;left:50%;transform:translateX(-50%);background:#222;padding:12px 20px;border-radius:12px;z-index:200;display:none;max-width:90%;text-align:center}
+.full{width:100%;margin-top:18px}.btn:disabled{opacity:.5}
+.note{color:var(--mut);font-size:12px;margin-top:12px;text-align:center}
+.toast{position:fixed;top:18px;left:50%;transform:translateX(-50%);background:#1c2336;border:1px solid var(--line);padding:12px 20px;border-radius:12px;z-index:200;display:none;max-width:90%;text-align:center}
 .blocked{position:fixed;inset:0;background:var(--bg);z-index:150;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px}
 .blocked .big{font-size:80px}.blocked h2{margin:14px 0 8px;color:var(--red)}
 </style></head><body>
 
 <div id="splash">
-  <div class="logo"><div class="ring r1"></div><div class="ring r2"></div>
-    <div class="core"><svg viewBox="0 0 24 24"><path d="M21 6H3a3 3 0 0 0-3 3v6a3 3 0 0 0 3 3h3l2-2h8l2 2h3a3 3 0 0 0 3-3V9a3 3 0 0 0-3-3zM9 12H7.5v1.5h-1V12H5v-1h1.500V9.500h1V11H9zm6.500 1a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm2.500-2a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/></svg></div></div>
+  <div class="sparks"><span style="left:20%;animation-delay:0s"></span><span style="left:35%;animation-delay:.6s"></span><span style="left:50%;animation-delay:1.1s"></span><span style="left:65%;animation-delay:1.7s"></span><span style="left:80%;animation-delay:2.2s"></span></div>
+  <div class="hex"><i></i><i></i><i></i><div class="coin">💎</div></div>
   <div class="sname">PORNO UC</div>
-  <div class="sload">YUKLANMOQDA<div class="bar"><i></i></div></div>
+  <div class="sub" id="sub">Ulanmoqda...</div>
+  <div class="pbar"><b id="pb"></b></div><div class="pct" id="pct">0%</div>
 </div>
 
 <div class="blocked" id="blocked"><div class="big">🚫</div><h2>Hisobingiz bloklangan</h2><p style="color:#999">Soxta chek yuborganingiz uchun bu xizmatdan foydalana olmaysiz.</p></div>
 <div class="toast" id="toast"></div>
 
 <div class="wrap">
-  <div class="hello">Xush kelibsiz 👋</div>
-  <div class="uname" id="uname">...</div>
-  <div class="bal"><div><small>BALANS</small><b><span id="bal0"></span><i id="bal" style="font-style:normal">0</i> <span>so'm</span></b></div>
-    <button class="btn" onclick="openM()">+ To'ldirish</button></div>
-  <div class="help" onclick="tgo()">🎧 Yordam</div>
-  <div class="banner"><span class="tag">OFFICIAL</span><h3>PORNO UC — ishonchli UC servis</h3><p>Tez va arzon donat, 24/7 ishlaydi</p></div>
-  <div class="sec"><h2>Ommabop o'yinlar</h2><a>Barchasi</a></div>
-  <div class="grid">
-    <div class="g" onclick="soon()"><div class="ic">🪖</div>PUBG MOBILE UC</div>
-    <div class="g" onclick="soon()"><div class="ic">🔥</div>Free Fire</div>
-    <div class="g" onclick="soon()"><div class="ic">⚔️</div>Mobile Legends</div>
-    <div class="g" onclick="soon()"><div class="ic">🎯</div>Standoff 2</div>
+  <div class="top"><div class="ava" id="ava">U</div><div><div class="n" id="uname">...</div><div class="s">PORNO UC mijozi</div></div><div class="chip">💎 <span id="chipb">0</span></div></div>
+
+  <div class="tab on" id="t-home">
+    <div class="hero"><small>BALANS</small><div class="amt"><span id="bal">0</span> <span>so'm</span></div>
+      <div class="btns"><button class="btn" onclick="openTop()">+ To'ldirish</button><button class="btn ghost" onclick="go('shop')">UC olish</button></div></div>
+    <div class="stats"><div class="stat"><b id="s1">0</b><span>Buyurtmalar</span></div><div class="stat"><b id="s2">0</b><span>Bajarilgan</span></div><div class="stat"><b id="s3">0</b><span>Kutilmoqda</span></div></div>
+    <div class="ticker"><div>⚡ Buyurtmalar o'rtacha 5–15 daqiqada bajariladi &nbsp;•&nbsp; 💎 Eng arzon UC narxlari &nbsp;•&nbsp; 🔒 Xavfsiz to'lov, chek admin tomonidan tekshiriladi &nbsp;•&nbsp; 🎧 Yordam 24/7</div></div>
+    <h2 class="t">Ommabop paketlar <a onclick="go('shop')">Barchasi</a></h2>
+    <div class="packs" id="popular"></div>
+  </div>
+
+  <div class="tab" id="t-shop"><h2 class="t" style="margin-top:4px">PUBG Mobile UC</h2><div class="packs" id="packs"></div></div>
+
+  <div class="tab" id="t-hist"><h2 class="t" style="margin-top:4px">Tarix</h2><div id="hist"></div></div>
+
+  <div class="tab" id="t-prof"><h2 class="t" style="margin-top:4px">Profil</h2>
+    <div class="prow"><span>Ism</span><b id="pn"></b></div>
+    <div class="prow"><span>Telegram ID</span><b id="pid"></b></div>
+    <div class="prow"><span>Balans</span><b id="pb2"></b></div>
+    <button class="btn full" onclick="T.openTelegramLink('https://t.me/okeni_tanimadingmi')">🎧 Yordam / Admin</button>
+    <p class="note">Qoida: soxta chek yuborgan foydalanuvchi bloklanadi.</p>
   </div>
 </div>
 
-<div class="nav"><div class="on"><span>🏠</span>Bosh</div><div><span>🎮</span>O'yinlar</div><div></div><div><span>🛍</span>Buyurtmalar</div><div><span>👤</span>Profil</div></div>
-<button class="plus" onclick="openM()">+</button>
+<div class="nav"><div class="on" data-t="home" onclick="go('home')"><span>🏠</span>Bosh</div><div data-t="shop" onclick="go('shop')"><span>💎</span>UC do'kon</div><div></div><div data-t="hist" onclick="go('hist')"><span>🧾</span>Tarix</div><div data-t="prof" onclick="go('prof')"><span>👤</span>Profil</div></div>
+<button class="fab" onclick="openTop()">💳</button>
 
-<div class="modal" id="modal"><div class="sheet">
-  <button class="close" onclick="closeM()">✕</button>
-  <h3>Hisobni to'ldirish</h3>
-  <div class="cardbox"><small>KARTA RAQAMI</small>
-    <div class="cn" id="card">1111 1111 1111 1111</div>
-    <div class="row"><div><small>KARTA EGASI</small><div style="font-weight:700" id="holder">A O</div></div>
-    <button class="cp" onclick="copyCard()">Nusxa</button></div></div>
+<div class="modal" id="mTop"><div class="sheet">
+  <button class="close" onclick="shut('mTop')">✕</button><h3>Hisobni to'ldirish</h3>
+  <div class="cardbox"><small>KARTA RAQAMI</small><div class="cn" id="card">1111 1111 1111 1111</div>
+    <div class="row"><div><small>KARTA EGASI</small><div style="font-weight:700" id="holder">A O</div></div><button class="cp" onclick="copyCard()">Nusxa</button></div></div>
   <label>To'lagan summangiz (so'm)</label>
   <input type="number" id="amount" inputmode="numeric" placeholder="Masalan: 50000">
+  <div class="chips"><b onclick="setA(12000)">12 000</b><b onclick="setA(60000)">60 000</b><b onclick="setA(120000)">120 000</b><b onclick="setA(300000)">300 000</b></div>
   <label>To'lov cheki (rasm)</label>
   <div class="up" id="upbox" onclick="document.getElementById('file').click()">📷 Chek rasmini tanlang</div>
   <input type="file" id="file" accept="image/*" hidden>
-  <button class="btn" id="send" onclick="submitTop()">Chekni yuborish</button>
-  <p style="color:var(--mut);font-size:12px;margin-top:12px;text-align:center">Chek admin tomonidan tekshiriladi. Soxta chek yuborsangiz hisobingiz bloklanadi.</p>
+  <button class="btn full" id="send" onclick="submitTop()">Chekni yuborish</button>
+  <p class="note">Chek admin tomonidan tekshiriladi. Soxta chek yuborsangiz hisobingiz bloklanadi.</p>
+</div></div>
+
+<div class="modal" id="mBuy"><div class="sheet">
+  <button class="close" onclick="shut('mBuy')">✕</button><h3 id="bt">UC xarid</h3>
+  <div class="cardbox"><small>TANLANGAN PAKET</small><div class="cn" id="bpack"></div><div id="bprice" style="font-weight:700"></div></div>
+  <label>PUBG Mobile ID</label>
+  <input type="text" id="pubg" inputmode="numeric" maxlength="12" placeholder="Masalan: 5123456789">
+  <button class="btn full" id="buyb" onclick="buy()">Sotib olish</button>
+  <p class="note">Narx balansingizdan yechiladi. Bekor qilinsa, pul qaytariladi.</p>
 </div></div>
 
 <script>
 const T=window.Telegram.WebApp;T.ready();T.expand();
-let CFG={min:1000};
+let CFG={min:1000,packs:[],balance:0,history:[]},SEL=0,BUSY=false;
 const $=id=>document.getElementById(id);
 const fmt=n=>String(n).replace(/\B(?=(\d{3})+(?!\d))/g,' ');
-function toast(t){const e=$('toast');e.textContent=t;e.style.display='block';setTimeout(()=>e.style.display='none',3000)}
-function soon(){toast('Tez orada qo\'shiladi 🚀')}
-function tgo(){T.openTelegramLink('https://t.me/okeni_tanimadingmi')}
-function openM(){$('modal').classList.add('show')}
-function closeM(){$('modal').classList.remove('show')}
+function toast(t){const e=$('toast');e.textContent=t;e.style.display='block';setTimeout(()=>e.style.display='none',3200)}
+function go(t){document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));$('t-'+t).classList.add('on');document.querySelectorAll('.nav div[data-t]').forEach(x=>x.classList.toggle('on',x.dataset.t===t));window.scrollTo(0,0)}
+function openTop(){$('mTop').classList.add('show')}
+function shut(id){$(id).classList.remove('show')}
+function setA(n){$('amount').value=n}
 function copyCard(){navigator.clipboard&&navigator.clipboard.writeText($('card').textContent.replace(/ /g,''));toast('Karta raqami nusxalandi ✅')}
-$('file').addEventListener('change',e=>{
-  const f=e.target.files[0];if(!f)return;
-  $('upbox').innerHTML='<img src="'+URL.createObjectURL(f)+'">';
-});
-async function load(){
-  const t0=Date.now();
+$('file').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;$('upbox').innerHTML='<img src="'+URL.createObjectURL(f)+'">'});
+const ST={pending:'⏳ Kutilmoqda',ok:'✅ Tasdiqlandi',done:'✅ Bajarildi',fake:'❌ Soxta',cancel:'↩️ Bekor'};
+function packHTML(p,i){const best=i===3?'<div class="badge">HIT</div>':'';return '<div class="pack" onclick="pick('+i+')">'+best+'<span class="gem">💎</span><div class="u">'+p[0]+' <small>UC</small></div><div class="p">'+fmt(p[1])+' so\'m</div></div>'}
+function render(){
+  $('bal').textContent=fmt(CFG.balance);$('pb2').textContent=fmt(CFG.balance)+' so\'m';$('chipb').textContent=fmt(CFG.balance);
+  $('packs').innerHTML=CFG.packs.map(packHTML).join('');
+  $('popular').innerHTML=CFG.packs.slice(1,5).map((p,k)=>packHTML(p,k+1)).join('');
+  const h=CFG.history;$('s1').textContent=h.filter(x=>x.type==='order').length;
+  $('s2').textContent=h.filter(x=>x.status==='done').length;$('s3').textContent=h.filter(x=>x.status==='pending').length;
+  $('hist').innerHTML=h.length?h.map(x=>'<div class="hist"><div class="ic">'+(x.type==='order'?'🛒':'💳')+'</div><div class="m"><b>'+x.label+'</b><span>'+fmt(x.amount)+' so\'m · #'+x.id+'</span></div><div class="st '+x.status+'">'+(ST[x.status]||x.status)+'</div></div>').join(''):'<div class="empty">Hozircha hech narsa yo\'q</div>';
+}
+function pick(i){SEL=i;const p=CFG.packs[i];$('bpack').textContent=p[0]+' UC';$('bprice').textContent=fmt(p[1])+' so\'m';$('mBuy').classList.add('show')}
+async function refresh(){const r=await fetch('/api/me',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:T.initData})});return r.json()}
+function apply(d){CFG=d;$('uname').textContent=d.name||'Mehmon';$('ava').textContent=(d.name||'U')[0].toUpperCase();$('pn').textContent=d.name;$('pid').textContent=d.id;$('card').textContent=d.card;$('holder').textContent=d.holder;if(d.blocked)$('blocked').style.display='flex';render()}
+async function buy(){
+  if(BUSY)return;const pid=$('pubg').value.trim();
+  if(!/^\d{5,12}$/.test(pid))return toast('PUBG ID ni to\'g\'ri kiriting');
+  BUSY=true;const b=$('buyb');b.disabled=true;b.textContent='Yuborilmoqda...';
   try{
-    const r=await fetch('/api/me',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:T.initData})});
-    const d=await r.json();
-    if(d.error){toast('Mini app ni Telegram orqali oching')}
-    else{
-      CFG=d;$('uname').textContent=(d.name||'').toUpperCase();
-      $('bal').textContent=fmt(d.balance);$('card').textContent=d.card;$('holder').textContent=d.holder;
-      if(d.blocked)$('blocked').style.display='flex';
-    }
-  }catch(e){toast('Server bilan aloqa yo\'q')}
-  setTimeout(()=>$('splash').classList.add('hide'),Math.max(0,2400-(Date.now()-t0)));
+    const r=await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:T.initData,pack:SEL,pubg_id:pid})});const d=await r.json();
+    if(d.ok){toast('✅ Buyurtma qabul qilindi!');shut('mBuy');apply(await refresh());go('hist')}
+    else if(d.error==='blocked'){shut('mBuy');$('blocked').style.display='flex'}
+    else toast(d.error||'Xatolik')
+  }catch(e){toast('Xatolik yuz berdi')}
+  BUSY=false;b.disabled=false;b.textContent='Sotib olish';
 }
 async function submitTop(){
   const amount=parseInt($('amount').value||'0'),f=$('file').files[0];
@@ -365,30 +486,28 @@ async function submitTop(){
   const fd=new FormData();fd.append('initData',T.initData);fd.append('amount',amount);fd.append('photo',f);
   try{
     const r=await fetch('/api/topup',{method:'POST',body:fd});const d=await r.json();
-    if(d.ok){toast('✅ Chek yuborildi! Tasdiqlanishini kuting');closeM();$('amount').value='';$('file').value='';$('upbox').textContent='📷 Chek rasmini tanlang'}
-    else if(d.error==='blocked'){closeM();$('blocked').style.display='flex'}
+    if(d.ok){toast('✅ Chek yuborildi! Tasdiqlanishini kuting');shut('mTop');$('amount').value='';$('file').value='';$('upbox').textContent='📷 Chek rasmini tanlang';apply(await refresh());}
+    else if(d.error==='blocked'){shut('mTop');$('blocked').style.display='flex'}
     else toast(d.error||'Xatolik')
   }catch(e){toast('Xatolik yuz berdi')}
   b.disabled=false;b.textContent='Chekni yuborish';
 }
-load();
+/* intro */
+const MSG=['Ulanmoqda...','Xavfsiz kanal ochilmoqda...','Narxlar yuklanmoqda...','Tayyor!'];
+let pc=0;const iv=setInterval(()=>{pc=Math.min(100,pc+Math.random()*9+3);$('pb').style.width=pc+'%';$('pct').textContent=Math.floor(pc)+'%';$('sub').textContent=MSG[Math.min(3,Math.floor(pc/26))];if(pc>=100)clearInterval(iv)},140);
+(async()=>{
+  const t0=Date.now();
+  try{const d=await refresh();if(d.error)toast('Mini app ni Telegram orqali oching');else apply(d)}catch(e){toast('Server bilan aloqa yo\'q')}
+  setTimeout(()=>{$('splash').classList.add('hide')},Math.max(0,2800-(Date.now()-t0)));
+})();
 </script></body></html>
 """
 
-@web.middleware
-async def cors(request, handler):
-    if request.method == "OPTIONS":
-        resp = web.Response()
-    else:
-        resp = await handler(request)
-    resp.headers["Access-Control-Allow-Origin"] = "*"
-    resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
-    resp.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
-    return resp
-
 app = web.Application(client_max_size=10 * 1024 * 1024, middlewares=[cors])
-app.add_routes([web.get("/", index), web.post("/api/me", api_me), web.post("/api/topup", api_topup),
-                web.options("/api/me", index), web.options("/api/topup", index)])
+app.add_routes([web.get("/", index), web.post("/api/me", api_me),
+                web.post("/api/topup", api_topup), web.post("/api/order", api_order),
+                web.options("/api/me", index), web.options("/api/topup", index),
+                web.options("/api/order", index)])
 app.on_startup.append(on_start)
 
 if __name__ == "__main__":
