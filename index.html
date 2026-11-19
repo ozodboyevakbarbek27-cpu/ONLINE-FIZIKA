@@ -1,343 +1,4 @@
-"""
-PORNO UC - Telegram bot + Mini App + Server (HAMMASI BITTA FAYLDA)
-
-Ishga tushirish (Render "Web Service" yoki boshqa Python hosting):
-    pip install aiohttp
-    python bot.py
-Environment Variables:  BOT_TOKEN = BotFather tokeni
-(WEBAPP_URL ixtiyoriy: Render manzilni o'zi beradi)
-
-Admin (@okeni_tanimadingmi) botga bir marta /start bosishi kerak.
-"""
-import os, json, hmac, hashlib, asyncio, time, html
-from urllib.parse import parse_qsl
-from aiohttp import web, ClientSession, FormData
-
-BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
-WEBAPP_URL = (os.getenv("WEBAPP_URL") or os.getenv("RENDER_EXTERNAL_URL") or "").strip().rstrip("/")
-if not BOT_TOKEN:
-    raise SystemExit("BOT_TOKEN topilmadi: hostingda Environment Variables ga BOT_TOKEN qo'shing")
-
-ADMIN_USERNAME = "okeni_tanimadingmi"
-PORT = int(os.getenv("PORT", "8080"))
-CARD_NUMBER = "1111 1111 1111 1111"
-CARD_HOLDER = "A O"
-MIN_AMOUNT = 1000
-# ============ NARXLAR (o'zingizga moslab o'zgartiring) ============
-# cat: "uc" = UC paketlar, "rp" = Royale Pass. price - so'mda.
-ITEMS = [
-    {"cat": "uc", "name": "60 UC",   "price": 12000},
-    {"cat": "uc", "name": "325 UC",  "price": 60000},
-    {"cat": "uc", "name": "660 UC",  "price": 120000},
-    {"cat": "uc", "name": "1800 UC", "price": 300000},
-    {"cat": "uc", "name": "3850 UC", "price": 600000},
-    {"cat": "uc", "name": "8100 UC", "price": 1200000},
-    {"cat": "rp", "name": "Elite Royale Pass",      "price": 110000},
-    {"cat": "rp", "name": "Elite Royale Pass Plus", "price": 300000},
-]
-# Admin ID ni qo'lda berish ixtiyoriy (Environment Variable: ADMIN_ID)
-ADMIN_ID = int(os.getenv("ADMIN_ID", "0") or 0)
-DB_FILE = "db.json"
-API = f"https://api.telegram.org/bot{BOT_TOKEN}"
-
-# ---------------- DB ----------------
-def load_db():
-    if os.path.exists(DB_FILE):
-        with open(DB_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {"admin_id": None, "users": {}, "requests": {}, "counter": 0}
-
-DB = load_db()
-if ADMIN_ID:
-    DB["admin_id"] = ADMIN_ID
-def save_db():
-    with open(DB_FILE, "w", encoding="utf-8") as f:
-        json.dump(DB, f, ensure_ascii=False, indent=1)
-
-def get_user(u):
-    uid = str(u["id"])
-    if uid not in DB["users"]:
-        DB["users"][uid] = {"balance": 0, "blocked": False}
-    DB["users"][uid]["name"] = u.get("first_name", "")
-    DB["users"][uid]["username"] = u.get("username", "")
-    save_db()
-    return DB["users"][uid]
-
-def fmt(n):
-    return f"{n:,}".replace(",", " ")
-
-# ---------------- Telegram helpers ----------------
-async def tg(method, data=None, files=None):
-    try:
-        async with ClientSession() as s:
-            if files:
-                fd = FormData()
-                for k, v in (data or {}).items():
-                    fd.add_field(k, v if isinstance(v, str) else json.dumps(v))
-                for k, (name, content, ctype) in files.items():
-                    fd.add_field(k, content, filename=name, content_type=ctype)
-                r = await s.post(f"{API}/{method}", data=fd)
-            else:
-                r = await s.post(f"{API}/{method}", json=data or {})
-            return await r.json()
-    except Exception as e:
-        print("tg xato:", method, e)
-        return {"ok": False, "result": []}
-
-def check_init_data(init_data):
-    try:
-        parsed = dict(parse_qsl(init_data, keep_blank_values=True))
-        recv_hash = parsed.pop("hash")
-        dcs = "\n".join(f"{k}={v}" for k, v in sorted(parsed.items()))
-        secret = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
-        calc = hmac.new(secret, dcs.encode(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(calc, recv_hash):
-            return None
-        if time.time() - int(parsed.get("auth_date", 0)) > 86400:
-            return None
-        return json.loads(parsed["user"])
-    except Exception:
-        return None
-
-def history_of(uid):
-    items = [dict(id=k, **{x: v[x] for x in ("type", "amount", "status", "label", "ts") if x in v})
-             for k, v in DB["requests"].items() if v["user_id"] == uid]
-    items.sort(key=lambda x: x.get("ts", 0), reverse=True)
-    return items[:20]
-
-# ---------------- API ----------------
-async def api_me(request):
-    body = await request.json()
-    u = check_init_data(body.get("initData", ""))
-    if not u:
-        return web.json_response({"error": "auth"}, status=401)
-    user = get_user(u)
-    return web.json_response({
-        "id": u["id"], "name": u.get("first_name", ""), "balance": user["balance"],
-        "blocked": user["blocked"], "card": CARD_NUMBER, "holder": CARD_HOLDER,
-        "min": MIN_AMOUNT, "items": ITEMS, "history": history_of(u["id"])})
-
-async def api_topup(request):
-    form = await request.post()
-    u = check_init_data(form.get("initData", ""))
-    if not u:
-        return web.json_response({"error": "Avtorizatsiya xatosi"}, status=401)
-    user = get_user(u)
-    if user["blocked"]:
-        return web.json_response({"error": "blocked"}, status=403)
-    try:
-        amount = int(form.get("amount", "0"))
-    except ValueError:
-        amount = 0
-    if amount < MIN_AMOUNT:
-        return web.json_response({"error": f"Minimal summa {MIN_AMOUNT} so'm"}, status=400)
-    photo = form.get("photo")
-    if not hasattr(photo, "file"):
-        return web.json_response({"error": "Chek rasmini yuboring"}, status=400)
-    content = photo.file.read()
-    if len(content) > 8 * 1024 * 1024 or len(content) < 100:
-        return web.json_response({"error": "Rasm hajmi noto'g'ri (max 8MB)"}, status=400)
-    if not DB["admin_id"]:
-        return web.json_response({"error": "Admin hali botni ishga tushirmagan"}, status=503)
-
-    DB["counter"] += 1
-    rid = str(DB["counter"])
-    DB["requests"][rid] = {"user_id": u["id"], "type": "topup", "amount": amount,
-                           "status": "pending", "label": "Hisob to'ldirish", "ts": int(time.time())}
-    save_db()
-    uname = f"@{u['username']}" if u.get("username") else "yo'q"
-    caption = (f"💳 <b>Yangi to'lov #{rid}</b>\n"
-               f"👤 {html.escape(u.get('first_name',''))} ({uname})\n"
-               f"🆔 <code>{u['id']}</code>\n"
-               f"💰 Summa: <b>{fmt(amount)}</b> so'm")
-    kb = {"inline_keyboard": [[
-        {"text": "✅ Tasdiqlash", "callback_data": f"ok:{rid}"},
-        {"text": "❌ Soxta (bloklash)", "callback_data": f"fake:{rid}"}]]}
-    res = await tg("sendPhoto",
-                   {"chat_id": str(DB["admin_id"]), "caption": caption,
-                    "parse_mode": "HTML", "reply_markup": kb},
-                   files={"photo": ("chek.jpg", content, photo.content_type or "image/jpeg")})
-    if not res.get("ok"):
-        DB["requests"][rid]["status"] = "cancel"
-        save_db()
-        return web.json_response({"error": "Chekni yuborib bo'lmadi"}, status=500)
-    return web.json_response({"ok": True, "id": rid})
-
-async def api_order(request):
-    body = await request.json()
-    u = check_init_data(body.get("initData", ""))
-    if not u:
-        return web.json_response({"error": "Avtorizatsiya xatosi"}, status=401)
-    user = get_user(u)
-    if user["blocked"]:
-        return web.json_response({"error": "blocked"}, status=403)
-    try:
-        item = ITEMS[int(body.get("pack"))]
-        name, price = item["name"], item["price"]
-    except Exception:
-        return web.json_response({"error": "Paket topilmadi"}, status=400)
-    pid = str(body.get("pubg_id", "")).strip()
-    if not (pid.isdigit() and 5 <= len(pid) <= 12):
-        return web.json_response({"error": "PUBG ID noto'g'ri (faqat raqam)"}, status=400)
-    if not DB["admin_id"]:
-        return web.json_response({"error": "Admin hali botni ishga tushirmagan"}, status=503)
-    if user["balance"] < price:
-        return web.json_response({"error": "Balans yetarli emas. Avval hisobni to'ldiring"}, status=400)
-
-    user["balance"] -= price
-    DB["counter"] += 1
-    rid = str(DB["counter"])
-    DB["requests"][rid] = {"user_id": u["id"], "type": "order", "amount": price, "status": "pending",
-                           "label": f"{name} · ID {pid}", "ts": int(time.time())}
-    save_db()
-    uname = f"@{u['username']}" if u.get("username") else "yo'q"
-    text = (f"🛒 <b>Yangi buyurtma #{rid}</b>\n"
-            f"👤 {html.escape(u.get('first_name',''))} ({uname})\n"
-            f"🎮 PUBG ID: <code>{pid}</code>\n"
-            f"{'👑' if item['cat'] == 'rp' else '💎'} Paket: <b>{html.escape(name)}</b>\n"
-            f"💰 To'langan: {fmt(price)} so'm")
-    kb = {"inline_keyboard": [[
-        {"text": "✅ Bajarildi", "callback_data": f"done:{rid}"},
-        {"text": "↩️ Bekor (pulni qaytarish)", "callback_data": f"cancel:{rid}"}]]}
-    res = await tg("sendMessage", {"chat_id": DB["admin_id"], "text": text,
-                                   "parse_mode": "HTML", "reply_markup": kb})
-    if not res.get("ok"):
-        user["balance"] += price
-        DB["requests"][rid]["status"] = "cancel"
-        save_db()
-        return web.json_response({"error": "Buyurtmani yuborib bo'lmadi"}, status=500)
-    return web.json_response({"ok": True, "balance": user["balance"]})
-
-async def index(request):
-    return web.Response(text=INDEX_HTML, content_type="text/html")
-
-@web.middleware
-async def cors(request, handler):
-    resp = web.Response() if request.method == "OPTIONS" else await handler(request)
-    resp.headers["Access-Control-Allow-Origin"] = "*"
-    resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
-    resp.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
-    return resp
-
-# ---------------- Bot polling ----------------
-async def handle_callback(cq):
-    if cq["from"]["id"] != DB.get("admin_id"):
-        await tg("answerCallbackQuery", {"callback_query_id": cq["id"], "text": "Ruxsat yo'q"})
-        return
-    action, rid = cq["data"].split(":")
-    req = DB["requests"].get(rid)
-    if not req or req["status"] != "pending":
-        await tg("answerCallbackQuery", {"callback_query_id": cq["id"], "text": "Allaqachon ko'rib chiqilgan"})
-        return
-    uid = str(req["user_id"])
-    user = DB["users"].setdefault(uid, {"balance": 0, "blocked": False})
-    amount, kind = req["amount"], req.get("type", "topup")
-    if kind == "topup" and action == "ok":
-        user["balance"] += amount
-        status = f"✅ TASDIQLANDI (+{fmt(amount)} so'm)"
-        note = f"✅ Hisobingiz {fmt(amount)} so'mga to'ldirildi!"
-    elif kind == "topup" and action == "fake":
-        user["blocked"] = True
-        status = "❌ SOXTA — foydalanuvchi bloklandi"
-        note = "🚫 Soxta chek yuborganingiz uchun hisobingiz bloklandi."
-    elif kind == "order" and action == "done":
-        status = "✅ BAJARILDI"
-        note = f"✅ Buyurtmangiz bajarildi: {req['label']}"
-    elif kind == "order" and action == "cancel":
-        user["balance"] += amount
-        status = "↩️ BEKOR QILINDI (pul qaytarildi)"
-        note = f"↩️ Buyurtma bekor qilindi, {fmt(amount)} so'm balansingizga qaytarildi."
-    else:
-        await tg("answerCallbackQuery", {"callback_query_id": cq["id"], "text": "Noto'g'ri amal"})
-        return
-    req["status"] = action
-    save_db()
-    await tg("answerCallbackQuery", {"callback_query_id": cq["id"], "text": status})
-    msg = cq["message"]
-    base = {"chat_id": msg["chat"]["id"], "message_id": msg["message_id"],
-            "reply_markup": {"inline_keyboard": []}}
-    if msg.get("photo"):
-        await tg("editMessageCaption", {**base, "caption": msg.get("caption", "") + f"\n\n{status}"})
-    else:
-        await tg("editMessageText", {**base, "text": msg.get("text", "") + f"\n\n{status}"})
-    await tg("sendMessage", {"chat_id": req["user_id"], "text": note})
-
-async def admin_cmd(chat, text):
-    parts = text.split()
-    cmd = parts[0].split("@")[0].lower()
-    def uid_of(i):
-        return str(parts[i]) if len(parts) > i and parts[i].isdigit() else None
-    if cmd in ("/block", "/unblock"):
-        uid = uid_of(1)
-        if not uid or uid not in DB["users"]:
-            return await tg("sendMessage", {"chat_id": chat, "text": "Foydalanish: /block ID yoki /unblock ID (ID — foydalanuvchi Telegram ID si)"})
-        DB["users"][uid]["blocked"] = (cmd == "/block")
-        save_db()
-        await tg("sendMessage", {"chat_id": chat, "text": ("🚫 Bloklandi: " if cmd == "/block" else "✅ Blokdan chiqarildi: ") + uid})
-    elif cmd == "/add":
-        uid = uid_of(1)
-        try:
-            amt = int(parts[2])
-        except Exception:
-            amt = 0
-        if not uid or uid not in DB["users"] or amt == 0:
-            return await tg("sendMessage", {"chat_id": chat, "text": "Foydalanish: /add ID SUMMA (minus ham mumkin)"})
-        DB["users"][uid]["balance"] += amt
-        save_db()
-        await tg("sendMessage", {"chat_id": chat, "text": f"✅ {uid} balansi: {fmt(DB['users'][uid]['balance'])} so'm"})
-    elif cmd == "/users":
-        rows = [f"{k} · {v.get('name','')} · {fmt(v['balance'])} so'm" + (" 🚫" if v["blocked"] else "")
-                for k, v in list(DB["users"].items())[-30:]]
-        await tg("sendMessage", {"chat_id": chat, "text": "\n".join(rows) or "Foydalanuvchi yo'q"})
-    elif cmd == "/help":
-        await tg("sendMessage", {"chat_id": chat, "text": "/users — oxirgi foydalanuvchilar\n/block ID\n/unblock ID\n/add ID SUMMA"})
-
-async def handle_update(up):
-    if "message" in up:
-        frm = up["message"]["from"]
-        text = up["message"].get("text", "")
-        if text.startswith("/start"):
-            if frm.get("username", "").lower() == ADMIN_USERNAME.lower():
-                DB["admin_id"] = frm["id"]
-                save_db()
-                await tg("sendMessage", {"chat_id": frm["id"],
-                         "text": "✅ Admin sifatida ulandingiz. Cheklar va buyurtmalar shu yerga keladi."})
-            get_user(frm)
-            kb = {"inline_keyboard": [[{"text": "💎 PORNO UC ni ochish",
-                                        "web_app": {"url": WEBAPP_URL or "https://telegram.org"}}]]}
-            await tg("sendMessage", {"chat_id": frm["id"],
-                     "text": "👋 PORNO UC ga xush kelibsiz!\nUC xarid qilish va hisobni to'ldirish uchun pastdagi tugmani bosing.",
-                     "reply_markup": kb})
-        elif text.startswith("/") and frm["id"] == DB.get("admin_id"):
-            await admin_cmd(frm["id"], text)
-    elif "callback_query" in up:
-        await handle_callback(up["callback_query"])
-
-async def poll():
-    offset = 0
-    while True:
-        try:
-            res = await tg("getUpdates", {"offset": offset, "timeout": 30,
-                                          "allowed_updates": ["message", "callback_query"]})
-            for up in res.get("result", []):
-                offset = up["update_id"] + 1
-                try:
-                    await handle_update(up)
-                except Exception as e:
-                    print("update xato:", e)
-        except Exception as e:
-            print("poll xato:", e)
-            await asyncio.sleep(3)
-
-async def on_start(app):
-    await tg("deleteWebhook", {})
-    if WEBAPP_URL:
-        await tg("setChatMenuButton", {"menu_button": {"type": "web_app", "text": "PORNO UC",
-                                                         "web_app": {"url": WEBAPP_URL}}})
-    app["poller"] = asyncio.create_task(poll())
-
-# ---------------- Mini App HTML ----------------
-INDEX_HTML = r"""<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="uz"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
@@ -500,6 +161,8 @@ input:focus{border-color:var(--c1)}
 
 <script>
 const T=window.Telegram.WebApp;T.ready();T.expand();
+// >>> FAQAT SHU QATORNI O'ZGARTIRING: bot.py ishlayotgan server manzili (oxirida / bo'lmasin)
+const API='https://SIZNING-SERVER.onrender.com';
 let CFG={min:1000,items:[],balance:0,history:[]},SEL=0,BUSY=false,CAT='uc';
 const $=id=>document.getElementById(id);
 const fmt=n=>String(n).replace(/\B(?=(\d{3})+(?!\d))/g,' ');
@@ -527,14 +190,14 @@ function render(){
   $('hist').innerHTML=h.length?h.map(x=>'<div class="hist"><div class="ic">'+(x.type==='order'?'🛒':'💳')+'</div><div class="m"><b>'+x.label+'</b><span>'+fmt(x.amount)+' so\'m · #'+x.id+'</span></div><div class="st '+x.status+'">'+(ST[x.status]||x.status)+'</div></div>').join(''):'<div class="empty">Hozircha hech narsa yo\'q</div>';
 }
 function pick(i){SEL=i;const p=CFG.items[i];$('bpack').textContent=p.name;$('bprice').textContent=fmt(p.price)+' so\'m';$('mBuy').classList.add('show')}
-async function refresh(){const r=await fetch('/api/me',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:T.initData})});return r.json()}
+async function refresh(){const r=await fetch(API+'/api/me',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:T.initData})});return r.json()}
 function apply(d){CFG=d;$('uname').textContent=d.name||'Mehmon';$('ava').textContent=(d.name||'U')[0].toUpperCase();$('pn').textContent=d.name;$('pid').textContent=d.id;$('card').textContent=d.card;$('holder').textContent=d.holder;if(d.blocked)$('blocked').style.display='flex';render()}
 async function buy(){
   if(BUSY)return;const pid=$('pubg').value.trim();
   if(!/^\d{5,12}$/.test(pid))return toast('PUBG ID ni to\'g\'ri kiriting');
   BUSY=true;const b=$('buyb');b.disabled=true;b.textContent='Yuborilmoqda...';
   try{
-    const r=await fetch('/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:T.initData,pack:SEL,pubg_id:pid})});const d=await r.json();
+    const r=await fetch(API+'/api/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:T.initData,pack:SEL,pubg_id:pid})});const d=await r.json();
     if(d.ok){toast('✅ Buyurtma qabul qilindi!');shut('mBuy');apply(await refresh());go('hist')}
     else if(d.error==='blocked'){shut('mBuy');$('blocked').style.display='flex'}
     else toast(d.error||'Xatolik')
@@ -549,7 +212,7 @@ async function submitTop(){
   const b=$('send');b.disabled=true;b.textContent='Yuborilmoqda...';
   const fd=new FormData();fd.append('initData',T.initData);fd.append('amount',amount);fd.append('photo',await shrink(f),'chek.jpg');
   try{
-    const r=await fetch('/api/topup',{method:'POST',body:fd});const d=await r.json();
+    const r=await fetch(API+'/api/topup',{method:'POST',body:fd});const d=await r.json();
     if(d.ok){toast('✅ Chek yuborildi! Tasdiqlanishini kuting');shut('mTop');$('amount').value='';$('file').value='';$('upbox').textContent='📷 Chek rasmini tanlang';apply(await refresh());}
     else if(d.error==='blocked'){shut('mTop');$('blocked').style.display='flex'}
     else toast(d.error||'Xatolik')
@@ -561,20 +224,10 @@ setInterval(async()=>{if(document.hidden)return;try{const d=await refresh();if(!
 /* intro */
 const MSG=['Ulanmoqda...','Xavfsiz kanal ochilmoqda...','Narxlar yuklanmoqda...','Tayyor!'];
 let pc=0;const iv=setInterval(()=>{pc=Math.min(100,pc+Math.random()*9+3);$('pb').style.width=pc+'%';$('pct').textContent=Math.floor(pc)+'%';$('sub').textContent=MSG[Math.min(3,Math.floor(pc/26))];if(pc>=100)clearInterval(iv)},140);
+setTimeout(()=>{if(!$('splash').classList.contains('hide'))$('sub').textContent='Server uyg\'onmoqda, biroz kuting...'},7000);
 (async()=>{
   const t0=Date.now();
-  try{const d=await refresh();if(d.error)toast('Mini app ni Telegram orqali oching');else apply(d)}catch(e){toast('Server bilan aloqa yo\'q')}
+  try{if(API.includes('SIZNING-SERVER'))throw new Error('api');const d=await refresh();if(d.error)toast('Mini app ni Telegram orqali oching');else apply(d)}catch(e){toast(API.includes('SIZNING-SERVER')?'index.html dagi API manzilini o\'zgartiring':'Server bilan aloqa yo\'q')}
   setTimeout(()=>{$('splash').classList.add('hide')},Math.max(0,2800-(Date.now()-t0)));
 })();
 </script></body></html>
-"""
-
-app = web.Application(client_max_size=10 * 1024 * 1024, middlewares=[cors])
-app.add_routes([web.get("/", index), web.post("/api/me", api_me),
-                web.post("/api/topup", api_topup), web.post("/api/order", api_order),
-                web.options("/api/me", index), web.options("/api/topup", index),
-                web.options("/api/order", index)])
-app.on_startup.append(on_start)
-
-if __name__ == "__main__":
-    web.run_app(app, port=PORT)
